@@ -1,0 +1,5 @@
+autogen_warning = "/* Binding from Rust to Cython  */"
+language = "C"
+
+[export]
+include = []
