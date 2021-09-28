@@ -2,19 +2,19 @@
 cimport numpy as np
 import numpy as np
 
-from flaco.includes cimport read_sql
+from flaco.includes cimport read_sql, Data, Data_Tag
 
 np.import_array()
 
-ctypedef fused data:
-    str
-    int
-
 
 cpdef int read():
-    cdef int result
+    cdef Data result
     result = read_sql()
-    return result
+
+    if result.tag == Data_Tag.Int64:
+        return result.int64._0
+    else:
+        return 0
 
 cdef resize(np.ndarray array, int len):
     array.resize(len)

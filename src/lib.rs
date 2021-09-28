@@ -22,8 +22,15 @@ impl Engine {
     }
 }
 
+
+#[repr(C)]
+pub enum Data {
+    Int64(i64),
+}
+
+
 #[no_mangle]
-pub extern "C" fn read_sql() -> u32 {
+pub extern "C" fn read_sql() -> Data {
     // read query to start rowstream
 
     // get first row, and construct schema/columns in numpy
@@ -37,7 +44,7 @@ pub extern "C" fn read_sql() -> u32 {
             // if value is None, convert to appropriate pandas null type (pd.NA, pd.NaT)
 
             // insert element into array
-    0
+    Data::Int64(1)
 }
 
 
