@@ -8,7 +8,7 @@ use std::{ffi, mem};
 type RowIteratorPtr = *mut u32;
 type RowPtr = *const u32;
 type RowDataArrayPtr = *const u32;
-type RowTypesArrayPtr = *const u32;
+type RowTypesArrayPtr = *const *const c_char;
 type RowColumnNamesArrayPtr = *const *const c_char;
 
 /// Supports creating connections to a given connection URI
@@ -86,12 +86,16 @@ pub extern "C" fn next_row(row_iter_ptr: RowIteratorPtr) -> RowPtr {
 #[no_mangle]
 pub extern "C" fn row_data(row_ptr: RowPtr, row_types_ptr: RowTypesArrayPtr) -> RowDataArrayPtr {
     let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row) };
-    let row_types = unsafe { Box::from_raw(row_types_ptr as *mut Vec<ffi::CString>) };
+    let row_types: Vec<*const c_char> = unsafe {
+        Vec::from_raw_parts(row_types_ptr as *mut _, row.len(), row.len())
+    };
     let len = row.len();
     let mut values = Vec::with_capacity(len);
     for i in 0..len {
-        let type_ = unsafe { row_types.get_unchecked(i) };
-        let val = match type_.as_bytes() {
+        // TODO: check if it's faster to re-iterate over row for type name
+        let type_ptr = unsafe { row_types.get_unchecked(i) };
+        let type_ = unsafe { ffi::CStr::from_ptr(*type_ptr) };
+        let val = match type_.to_bytes() {
             b"int4" | b"int" | b"serial" => Data::Int32(row.get(i)),
             _ => unimplemented!("Unsupported type: {:?}", type_),
         };
@@ -105,14 +109,21 @@ pub extern "C" fn row_data(row_ptr: RowPtr, row_types_ptr: RowTypesArrayPtr) -> 
 #[no_mangle]
 pub extern "C" fn row_types(row_ptr: RowPtr) -> RowTypesArrayPtr {
     let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row) };
-    let names = row
+    let types = row
         .columns()
         .iter()
         .map(|col| col.type_().name().to_string())
-        .map(|name| ffi::CString::new(name).unwrap())
-        .collect::<Vec<ffi::CString>>();
+        .map(|name| {
+            let name = ffi::CString::new(name).unwrap();
+            let ptr = name.as_ptr();
+            mem::forget(name);
+            ptr
+        })
+        .collect::<Vec<*const c_char>>();
     mem::forget(row);
-    Box::into_raw(Box::new(names)) as RowTypesArrayPtr
+    let ptr = types.as_ptr();
+    mem::forget(types);
+    ptr
 }
 
 #[no_mangle]

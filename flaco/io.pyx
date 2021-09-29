@@ -26,13 +26,18 @@ cpdef int read_sql(str stmt, Engine engine):
     row_col_names = lib.row_column_names(row)
     n_columns = lib.n_columns(row)
 
+    # build columns
     columns = np.zeros(shape=n_columns, dtype=object)
-
     cdef int i
     for i in range(0, n_columns):
         print(row_col_names[i])
         columns[i] = row_col_names[i].decode()
     print(f"Done, columns: {columns}")
+
+    # build arrays based on types
+    for i in range(0, n_columns):
+        print(row_types[i])
+
     # Begin looping until no rows are returned
     while True:
         if row == NULL:
@@ -50,7 +55,7 @@ cpdef int read_sql(str stmt, Engine engine):
     #free(row_col_names_view)
     lib.drop(row_iterator)
     lib.drop(row)
-    lib.drop(row_types)
+    #lib.drop(row_types)
     #lib.drop(row_col_names)
     return 1
 
