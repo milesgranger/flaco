@@ -1,5 +1,5 @@
 //#![warn(missing_docs)]
-
+use std::os::raw::{c_char};
 use tokio_postgres as pg;
 
 /// Supports creating connections to a given connection URI
@@ -26,6 +26,8 @@ impl Engine {
 #[repr(C)]
 pub enum Data {
     Int64(i64),
+    Float64(f64),
+    String(*const c_char)
 }
 
 

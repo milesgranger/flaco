@@ -2,14 +2,14 @@
 cimport numpy as np
 import numpy as np
 
-from flaco.includes cimport read_sql, Data, Data_Tag
+from flaco.includes cimport read_sql as _read_sql, Data, Data_Tag
 
 np.import_array()
 
 
-cpdef int read():
+cpdef int read_sql():
     cdef Data result
-    result = read_sql()
+    result = _read_sql()
 
     if result.tag == Data_Tag.Int64:
         return result.int64._0
