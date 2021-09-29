@@ -15,6 +15,9 @@ cdef extern from "./libflaco.h":
     ctypedef struct Int64_Body:
         np.int64_t _0
 
+    ctypedef struct Float32_Body:
+        np.float32_t _0
+
     ctypedef struct Float64_Body:
         np.float64_t _0
 
@@ -23,8 +26,10 @@ cdef extern from "./libflaco.h":
 
     ctypedef struct Data:
         Data_Tag tag
+
         Int32_Body int32
         Int64_Body int64
+        Float32_Body float32
         Float64_Body float64
         String_Body string
 

@@ -28,11 +28,14 @@ impl Engine {
 
 #[repr(C)]
 pub enum Data {
-    Int64(i64),
     Int32(i32),
+    Int64(i64),
+    Float32(f32),
     Float64(f64),
     String(*const c_char),
 }
+
+#[repr()]
 
 #[no_mangle]
 pub extern "C" fn create_engine(uri_ptr: *const c_char) -> *mut u32 {
@@ -95,8 +98,20 @@ pub extern "C" fn row_data(row_ptr: RowPtr, row_types_ptr: RowTypesArrayPtr) -> 
         // TODO: check if it's faster to re-iterate over row for type name
         let type_ptr = unsafe { row_types.get_unchecked(i) };
         let type_ = unsafe { ffi::CStr::from_ptr(*type_ptr) };
+        // TODO: postgres-types: expose Inner enum which these variations
+        // and have postgres Row.type/(or something) expose the variant
         let val = match type_.to_bytes() {
             b"int4" | b"int" | b"serial" => Data::Int32(row.get(i)),
+            b"bigint" | b"bigserial" => Data::Int64(row.get(i)),
+            b"double precision" => Data::Float64(row.get(i)),
+            b"real" => Data::Float32(row.get(i)),
+            b"varchar" | b"char" | b"text" | b"citext" | b"name" | b"unknown" => {
+                let string: String = row.get(i);
+                let cstring = ffi::CString::new(string).unwrap();
+                let ptr = cstring.as_ptr();
+                mem::forget(cstring);
+                Data::String(ptr)
+            }
             _ => unimplemented!("Unsupported type: {:?}", type_),
         };
         values.push(val)
