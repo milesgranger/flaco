@@ -29,6 +29,7 @@ impl Engine {
 #[repr(C)]
 pub enum Data {
     Int64(i64),
+    Int32(i32),
     Float64(f64),
     String(*const c_char),
 }
@@ -75,10 +76,7 @@ pub extern "C" fn read_sql(stmt_ptr: *const c_char, engine_ptr: *mut u32) -> Row
 pub extern "C" fn next_row(row_iter_ptr: RowIteratorPtr) -> RowPtr {
     let mut row_iter = unsafe { Box::from_raw(row_iter_ptr as *mut RowIter) };
     let ptr = match row_iter.next().unwrap() {
-        Some(row) => {
-            println!("fetched row: {:?}", &row);
-            Box::into_raw(Box::new(row)) as RowPtr
-        }
+        Some(row) => Box::into_raw(Box::new(row)) as RowPtr,
         None => std::ptr::null(),
     };
     mem::forget(row_iter);
@@ -94,7 +92,7 @@ pub extern "C" fn row_data(row_ptr: RowPtr, row_types_ptr: RowTypesArrayPtr) -> 
     for i in 0..len {
         let type_ = unsafe { row_types.get_unchecked(i) };
         let val = match type_.as_bytes() {
-            b"int4" => Data::Int64(row.get(i)),
+            b"int4" | b"int" | b"serial" => Data::Int32(row.get(i)),
             _ => unimplemented!("Unsupported type: {:?}", type_),
         };
         values.push(val)

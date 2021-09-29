@@ -12,6 +12,7 @@ cpdef int read_sql(str stmt, Engine engine):
     cdef lib.RowPtr row
     cdef lib.RowColumnNamesArrayPtr row_col_names
     cdef lib.RowTypesArrayPtr row_types
+    cdef lib.RowDataArrayPtr row_data
 
     row_iterator = lib.read_sql(<char*>stmt_bytes, engine.client_ptr)
 
@@ -27,6 +28,7 @@ cpdef int read_sql(str stmt, Engine engine):
         if row == NULL:
             break
         else:
+            row_data = lib.row_data(row, row_types)
             lib.drop(row)
 
         row = lib.next_row(row_iterator)
