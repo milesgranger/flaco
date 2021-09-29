@@ -9,9 +9,7 @@ license = "Unlicense/MIT"
 crate-type = ["cdylib"]
 
 [dependencies]
-tokio = { version = "^1.12", features = ["full"] }
-tokio-postgres = "0.7.2"
-tokio-postgres-rustls = "0.8.0"
+postgres = "0.19.1"
 
 [build-dependencies]
 cbindgen = "^0.6.0"

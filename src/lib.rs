@@ -1,6 +1,6 @@
 //#![warn(missing_docs)]
 use std::os::raw::{c_char};
-use tokio_postgres as pg;
+use postgres as pg;
 
 /// Supports creating connections to a given connection URI
 pub struct Engine {
@@ -11,13 +11,8 @@ impl Engine {
     /// Create an `Engine` object
     /// `uri` is to conform to any of the normal connection strings, described
     /// in more [detail here](https://docs.rs/tokio-postgres/0.7.2/tokio_postgres/config/struct.Config.html#examples)
-    pub async fn new(uri: &str) -> Self {
-        let (client, con) = pg::connect(uri, pg::NoTls).await.unwrap();
-        tokio::spawn(async move {
-            if let Err(e) = con.await {
-                eprintln!("connection error: {}", e);
-            }
-        });
+    pub fn new(uri: &str) -> Self {
+        let client = pg::Client::connect(uri, pg::NoTls).unwrap();
         Self { client }
     }
 }
@@ -28,6 +23,20 @@ pub enum Data {
     Int64(i64),
     Float64(f64),
     String(*const c_char)
+}
+
+
+#[no_mangle]
+pub extern "C" fn create_engine(uri_ptr: *const c_char) -> *mut u32 {
+    let uri_c = unsafe { std::ffi::CStr::from_ptr(uri_ptr) };
+    let uri = uri_c.to_str().unwrap();
+    let engine = Box::new(Engine::new(uri));
+    Box::into_raw(engine) as *mut _
+}
+
+#[no_mangle]
+pub extern "C" fn free_engine(ptr: *mut u32) {
+    unsafe { Box::from_raw(ptr) };
 }
 
 
@@ -56,15 +65,12 @@ mod tests {
     use super::*;
     const CONNECTION_URI: &str = "postgresql://postgres:postgres@localhost:5432/postgres";
 
-    #[tokio::test]
-    async fn basic_query() {
-        let engine = Engine::new(CONNECTION_URI).await;
+    fn basic_query() {
+        let engine = Engine::new(CONNECTION_URI);
         engine
-            .execute("create table if not exists foobar (col1 integer, col2 integer)")
-            .await;
+            .execute("create table if not exists foobar (col1 integer, col2 integer)");
         let n_rows = engine
-            .execute("insert into foobar (col1, col2) values (1, 1)")
-            .await;
+            .execute("insert into foobar (col1, col2) values (1, 1)");
         assert_eq!(n_rows, 1)
     }
 }
