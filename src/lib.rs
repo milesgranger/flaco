@@ -9,7 +9,7 @@ type RowIteratorPtr = *mut u32;
 type RowPtr = *const u32;
 type RowDataArrayPtr = *const u32;
 type RowTypesArrayPtr = *const u32;
-type RowColumnNamesArrayPtr = *const u32;
+type RowColumnNamesArrayPtr = *const *const c_char;
 
 /// Supports creating connections to a given connection URI
 pub struct Engine {
@@ -123,7 +123,8 @@ pub extern "C" fn row_column_names(row_ptr: RowPtr) -> RowColumnNamesArrayPtr {
         .iter()
         .map(|col| col.name())
         .map(|name| ffi::CString::new(name).unwrap())
-        .collect::<Vec<ffi::CString>>();
+        .map(|name| name.as_ptr())
+        .collect::<Vec<*const c_char>>();
     mem::forget(row);
     Box::into_raw(Box::new(names)) as RowColumnNamesArrayPtr
 }

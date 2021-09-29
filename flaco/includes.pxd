@@ -30,7 +30,7 @@ cdef extern from "./libflaco.h":
 
     ctypedef np.uint32_t *RowIteratorPtr
     ctypedef np.uint32_t *RowPtr
-    ctypedef np.uint32_t *RowColumnNamesArrayPtr
+    ctypedef char **RowColumnNamesArrayPtr
     ctypedef np.uint32_t *RowDataArrayPtr
     ctypedef np.uint32_t *RowTypesArrayPtr
 
