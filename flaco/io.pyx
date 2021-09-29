@@ -26,10 +26,13 @@ cpdef int read_sql(str stmt, Engine engine):
     row_col_names = lib.row_column_names(row)
     n_columns = lib.n_columns(row)
 
+    columns = np.zeros(shape=n_columns, dtype=object)
+
     cdef int i
     for i in range(0, n_columns):
         print(row_col_names[i])
-    print("Done")
+        columns[i] = row_col_names[i].decode()
+    print(f"Done, columns: {columns}")
     # Begin looping until no rows are returned
     while True:
         if row == NULL:
