@@ -24,8 +24,24 @@ cdef extern from "./libflaco.h":
         String_Body string
 
     ctypedef np.uint32_t *RowIteratorPtr
+    ctypedef np.uint32_t *RowPtr
+    ctypedef np.uint32_t *RowColumnNamesArrayPtr
+    ctypedef np.uint32_t *RowDataArrayPtr
+    ctypedef np.uint32_t *RowTypesArrayPtr
+
 
     RowIteratorPtr read_sql(char *stmt_ptr, np.uint32_t *engine_ptr)
-    np.uint32_t* next_row(RowIteratorPtr row_iter_ptr)
+
     np.uint32_t* create_engine(char *uri_ptr)
+
     void drop(np.uint32_t *ptr)
+
+    RowPtr next_row(RowIteratorPtr row_iter_ptr)
+
+    RowIteratorPtr read_sql(const char *stmt_ptr, np.uint32_t *engine_ptr)
+
+    RowColumnNamesArrayPtr row_column_names(RowPtr row_ptr)
+
+    RowDataArrayPtr row_data(RowPtr row_ptr, RowTypesArrayPtr row_types_ptr)
+
+    RowTypesArrayPtr row_types(RowPtr row_ptr)

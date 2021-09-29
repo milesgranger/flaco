@@ -1,12 +1,15 @@
 //#![warn(missing_docs)]
-use std::os::raw::{c_char};
-use std::{ffi, mem};
 use postgres as pg;
-use postgres::RowIter;
 use postgres::fallible_iterator::FallibleIterator;
-
+use postgres::RowIter;
+use std::os::raw::c_char;
+use std::{ffi, mem};
 
 type RowIteratorPtr = *mut u32;
+type RowPtr = *const u32;
+type RowDataArrayPtr = *const u32;
+type RowTypesArrayPtr = *const u32;
+type RowColumnNamesArrayPtr = *const u32;
 
 /// Supports creating connections to a given connection URI
 pub struct Engine {
@@ -23,14 +26,12 @@ impl Engine {
     }
 }
 
-
 #[repr(C)]
 pub enum Data {
     Int64(i64),
     Float64(f64),
-    String(*const c_char)
+    String(*const c_char),
 }
-
 
 #[no_mangle]
 pub extern "C" fn create_engine(uri_ptr: *const c_char) -> *mut u32 {
@@ -45,26 +46,25 @@ pub extern "C" fn drop(ptr: *mut u32) {
     unsafe { Box::from_raw(ptr) };
 }
 
-
 #[no_mangle]
 pub extern "C" fn read_sql(stmt_ptr: *const c_char, engine_ptr: *mut u32) -> RowIteratorPtr {
     let mut engine = unsafe { Box::from_raw(engine_ptr as *mut Engine) };
     let stmt_c = unsafe { ffi::CStr::from_ptr(stmt_ptr) };
     let stmt = stmt_c.to_str().unwrap();
-    let mut row_iter = engine.client.query_raw::<_, &i32, _>(stmt, &[]).unwrap();
+    let row_iter = engine.client.query_raw::<_, &i32, _>(stmt, &[]).unwrap();
     // read query to start rowstream
 
     // get first row, and construct schema/columns in numpy
 
     // iterate over each row in the stream
 
-        // for each column value in row
+    // for each column value in row
 
-            // First iteration, check if arrays should be resized to fit new row.
+    // First iteration, check if arrays should be resized to fit new row.
 
-            // if value is None, convert to appropriate pandas null type (pd.NA, pd.NaT)
+    // if value is None, convert to appropriate pandas null type (pd.NA, pd.NaT)
 
-            // insert element into array
+    // insert element into array
     let row_iterator = Box::new(row_iter);
     let ptr = Box::into_raw(row_iterator) as RowIteratorPtr;
     mem::forget(engine);
@@ -72,23 +72,63 @@ pub extern "C" fn read_sql(stmt_ptr: *const c_char, engine_ptr: *mut u32) -> Row
 }
 
 #[no_mangle]
-pub extern "C" fn next_row(row_iter_ptr: RowIteratorPtr) -> *const u32 {
+pub extern "C" fn next_row(row_iter_ptr: RowIteratorPtr) -> RowPtr {
     let mut row_iter = unsafe { Box::from_raw(row_iter_ptr as *mut RowIter) };
     let ptr = match row_iter.next().unwrap() {
         Some(row) => {
-            let columns = row.columns().iter().map(|col| col.name().to_string()).collect::<Vec<String>>();
-            let values = row.columns().iter().map(|col| {
-                col.type_().name().to_string()
-            }).collect::<Vec<String>>();
-            println!("{:?}", values);
-            std::ptr::null()
-        },
-        None => std::ptr::null()
+            println!("fetched row: {:?}", &row);
+            Box::into_raw(Box::new(row)) as RowPtr
+        }
+        None => std::ptr::null(),
     };
     mem::forget(row_iter);
     ptr
 }
 
+#[no_mangle]
+pub extern "C" fn row_data(row_ptr: RowPtr, row_types_ptr: RowTypesArrayPtr) -> RowDataArrayPtr {
+    let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row) };
+    let row_types = unsafe { Box::from_raw(row_types_ptr as *mut Vec<ffi::CString>) };
+    let len = row.len();
+    let mut values = Vec::with_capacity(len);
+    for i in 0..len {
+        let type_ = unsafe { row_types.get_unchecked(i) };
+        let val = match type_.as_bytes() {
+            b"int4" => Data::Int64(row.get(i)),
+            _ => unimplemented!("Unsupported type: {:?}", type_),
+        };
+        values.push(val)
+    }
+    mem::forget(row);
+    mem::forget(row_types);
+    Box::into_raw(Box::new(values)) as RowDataArrayPtr
+}
+
+#[no_mangle]
+pub extern "C" fn row_types(row_ptr: RowPtr) -> RowTypesArrayPtr {
+    let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row) };
+    let names = row
+        .columns()
+        .iter()
+        .map(|col| col.type_().name().to_string())
+        .map(|name| ffi::CString::new(name).unwrap())
+        .collect::<Vec<ffi::CString>>();
+    mem::forget(row);
+    Box::into_raw(Box::new(names)) as RowTypesArrayPtr
+}
+
+#[no_mangle]
+pub extern "C" fn row_column_names(row_ptr: RowPtr) -> RowColumnNamesArrayPtr {
+    let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row) };
+    let names = row
+        .columns()
+        .iter()
+        .map(|col| col.name())
+        .map(|name| ffi::CString::new(name).unwrap())
+        .collect::<Vec<ffi::CString>>();
+    mem::forget(row);
+    Box::into_raw(Box::new(names)) as RowColumnNamesArrayPtr
+}
 
 #[cfg(test)]
 mod tests {
@@ -98,10 +138,8 @@ mod tests {
 
     fn basic_query() {
         let engine = Engine::new(CONNECTION_URI);
-        engine
-            .execute("create table if not exists foobar (col1 integer, col2 integer)");
-        let n_rows = engine
-            .execute("insert into foobar (col1, col2) values (1, 1)");
+        engine.execute("create table if not exists foobar (col1 integer, col2 integer)");
+        let n_rows = engine.execute("insert into foobar (col1, col2) values (1, 1)");
         assert_eq!(n_rows, 1)
     }
 }
