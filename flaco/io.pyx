@@ -1,7 +1,7 @@
 cimport numpy as np
 import numpy as np
 from libc.stdlib cimport malloc
-from flaco.includes cimport read_sql as _read_sql, Data, Data_Tag, free_engine, create_engine, RowIteratorPtr, next_row
+from flaco.includes cimport read_sql as _read_sql, Data, Data_Tag, drop, create_engine, RowIteratorPtr, next_row
 
 np.import_array()
 
@@ -9,15 +9,17 @@ np.import_array()
 cpdef int read_sql(str stmt, Engine engine):
     cdef RowIteratorPtr result
     cdef bytes stmt_bytes = stmt.encode("utf-8")
-    cdef Data data
+    cdef np.uint32_t* data
     result = _read_sql(<char*>stmt_bytes, engine.client_ptr)
 
     data = next_row(result)
     data = next_row(result)
-    if data.tag == Data_Tag.Int64:
-        return data.int64._0
-    else:
-        return 0
+    #if data.tag == Data_Tag.Int64:
+    #    return data.int64._0
+    #else:
+    #    return 0
+    drop(result)
+    return 1
 
 cdef resize(np.ndarray array, int len):
     array.resize(len)
@@ -40,4 +42,4 @@ cdef class Engine:
 
     def __dealloc__(self):
         if &self.client_ptr != NULL:
-            free_engine(self.client_ptr)
+            drop(self.client_ptr)

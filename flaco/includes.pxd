@@ -1,4 +1,5 @@
 cimport numpy as np
+from libcpp cimport bool
 
 cdef extern from "./libflaco.h":
 
@@ -25,6 +26,6 @@ cdef extern from "./libflaco.h":
     ctypedef np.uint32_t *RowIteratorPtr
 
     RowIteratorPtr read_sql(char *stmt_ptr, np.uint32_t *engine_ptr)
-    Data next_row(RowIteratorPtr row_iter_ptr)
+    np.uint32_t* next_row(RowIteratorPtr row_iter_ptr)
     np.uint32_t* create_engine(char *uri_ptr)
-    void free_engine(np.uint32_t *engine_ptr)
+    void drop(np.uint32_t *ptr)

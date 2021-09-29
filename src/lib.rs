@@ -41,7 +41,7 @@ pub extern "C" fn create_engine(uri_ptr: *const c_char) -> *mut u32 {
 }
 
 #[no_mangle]
-pub extern "C" fn free_engine(ptr: *mut u32) {
+pub extern "C" fn drop(ptr: *mut u32) {
     unsafe { Box::from_raw(ptr) };
 }
 
@@ -72,11 +72,21 @@ pub extern "C" fn read_sql(stmt_ptr: *const c_char, engine_ptr: *mut u32) -> Row
 }
 
 #[no_mangle]
-pub extern "C" fn next_row(row_iter_ptr: RowIteratorPtr) -> Data {
+pub extern "C" fn next_row(row_iter_ptr: RowIteratorPtr) -> *const u32 {
     let mut row_iter = unsafe { Box::from_raw(row_iter_ptr as *mut RowIter) };
-    println!("row: {:?}", row_iter.next());
+    let ptr = match row_iter.next().unwrap() {
+        Some(row) => {
+            let columns = row.columns().iter().map(|col| col.name().to_string()).collect::<Vec<String>>();
+            let values = row.columns().iter().map(|col| {
+                col.type_().name().to_string()
+            }).collect::<Vec<String>>();
+            println!("{:?}", values);
+            std::ptr::null()
+        },
+        None => std::ptr::null()
+    };
     mem::forget(row_iter);
-    Data::Int64(1)
+    ptr
 }
 
 
