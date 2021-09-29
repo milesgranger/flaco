@@ -1,18 +1,21 @@
 cimport numpy as np
 import numpy as np
 from libc.stdlib cimport malloc
-from flaco.includes cimport read_sql as _read_sql, Data, Data_Tag, free_engine, create_engine
+from flaco.includes cimport read_sql as _read_sql, Data, Data_Tag, free_engine, create_engine, RowIteratorPtr, next_row
 
 np.import_array()
 
 
 cpdef int read_sql(str stmt, Engine engine):
-    cdef Data result
+    cdef RowIteratorPtr result
     cdef bytes stmt_bytes = stmt.encode("utf-8")
+    cdef Data data
     result = _read_sql(<char*>stmt_bytes, engine.client_ptr)
 
-    if result.tag == Data_Tag.Int64:
-        return result.int64._0
+    data = next_row(result)
+    data = next_row(result)
+    if data.tag == Data_Tag.Int64:
+        return data.int64._0
     else:
         return 0
 
@@ -21,7 +24,6 @@ cdef resize(np.ndarray array, int len):
 
 cdef np.ndarray array_init(int len, np.dtype dtype):
     return np.empty(len, dtype=dtype)
-
 
 cdef class Engine:
 

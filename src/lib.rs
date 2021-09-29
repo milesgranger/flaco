@@ -2,6 +2,11 @@
 use std::os::raw::{c_char};
 use std::{ffi, mem};
 use postgres as pg;
+use postgres::RowIter;
+use postgres::fallible_iterator::FallibleIterator;
+
+
+type RowIteratorPtr = *mut u32;
 
 /// Supports creating connections to a given connection URI
 pub struct Engine {
@@ -42,11 +47,11 @@ pub extern "C" fn free_engine(ptr: *mut u32) {
 
 
 #[no_mangle]
-pub extern "C" fn read_sql(stmt_ptr: *const c_char, engine_ptr: *mut u32) -> Data {
-    let engine = unsafe { Box::from_raw(engine_ptr as *mut Engine) };
+pub extern "C" fn read_sql(stmt_ptr: *const c_char, engine_ptr: *mut u32) -> RowIteratorPtr {
+    let mut engine = unsafe { Box::from_raw(engine_ptr as *mut Engine) };
     let stmt_c = unsafe { ffi::CStr::from_ptr(stmt_ptr) };
     let stmt = stmt_c.to_str().unwrap();
-
+    let mut row_iter = engine.client.query_raw::<_, &i32, _>(stmt, &[]).unwrap();
     // read query to start rowstream
 
     // get first row, and construct schema/columns in numpy
@@ -60,7 +65,17 @@ pub extern "C" fn read_sql(stmt_ptr: *const c_char, engine_ptr: *mut u32) -> Dat
             // if value is None, convert to appropriate pandas null type (pd.NA, pd.NaT)
 
             // insert element into array
+    let row_iterator = Box::new(row_iter);
+    let ptr = Box::into_raw(row_iterator) as RowIteratorPtr;
     mem::forget(engine);
+    ptr
+}
+
+#[no_mangle]
+pub extern "C" fn next_row(row_iter_ptr: RowIteratorPtr) -> Data {
+    let mut row_iter = unsafe { Box::from_raw(row_iter_ptr as *mut RowIter) };
+    println!("row: {:?}", row_iter.next());
+    mem::forget(row_iter);
     Data::Int64(1)
 }
 
