@@ -22,6 +22,6 @@ cdef extern from "./libflaco.h":
         Float64_Body float64
         String_Body string
 
-    Data read_sql()
+    Data read_sql(char *stmt_ptr, np.uint32_t *engine_ptr)
     np.uint32_t* create_engine(char *uri_ptr)
     void free_engine(np.uint32_t *engine_ptr)

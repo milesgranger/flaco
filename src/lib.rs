@@ -1,5 +1,6 @@
 //#![warn(missing_docs)]
 use std::os::raw::{c_char};
+use std::{ffi, mem};
 use postgres as pg;
 
 /// Supports creating connections to a given connection URI
@@ -28,7 +29,7 @@ pub enum Data {
 
 #[no_mangle]
 pub extern "C" fn create_engine(uri_ptr: *const c_char) -> *mut u32 {
-    let uri_c = unsafe { std::ffi::CStr::from_ptr(uri_ptr) };
+    let uri_c = unsafe { ffi::CStr::from_ptr(uri_ptr) };
     let uri = uri_c.to_str().unwrap();
     let engine = Box::new(Engine::new(uri));
     Box::into_raw(engine) as *mut _
@@ -41,7 +42,11 @@ pub extern "C" fn free_engine(ptr: *mut u32) {
 
 
 #[no_mangle]
-pub extern "C" fn read_sql() -> Data {
+pub extern "C" fn read_sql(stmt_ptr: *const c_char, engine_ptr: *mut u32) -> Data {
+    let engine = unsafe { Box::from_raw(engine_ptr as *mut Engine) };
+    let stmt_c = unsafe { ffi::CStr::from_ptr(stmt_ptr) };
+    let stmt = stmt_c.to_str().unwrap();
+
     // read query to start rowstream
 
     // get first row, and construct schema/columns in numpy
@@ -55,6 +60,7 @@ pub extern "C" fn read_sql() -> Data {
             // if value is None, convert to appropriate pandas null type (pd.NA, pd.NaT)
 
             // insert element into array
+    mem::forget(engine);
     Data::Int64(1)
 }
 

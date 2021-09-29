@@ -6,9 +6,10 @@ from flaco.includes cimport read_sql as _read_sql, Data, Data_Tag, free_engine, 
 np.import_array()
 
 
-cpdef int read_sql():
+cpdef int read_sql(str stmt, Engine engine):
     cdef Data result
-    result = _read_sql()
+    cdef bytes stmt_bytes = stmt.encode("utf-8")
+    result = _read_sql(<char*>stmt_bytes, engine.client_ptr)
 
     if result.tag == Data_Tag.Int64:
         return result.int64._0
