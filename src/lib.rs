@@ -123,10 +123,16 @@ pub extern "C" fn row_column_names(row_ptr: RowPtr) -> RowColumnNamesArrayPtr {
         .iter()
         .map(|col| col.name())
         .map(|name| ffi::CString::new(name).unwrap())
-        .map(|name| name.as_ptr())
+        .map(|name| {
+            let ptr = name.as_ptr();
+            mem::forget(name);
+            ptr
+        })
         .collect::<Vec<*const c_char>>();
     mem::forget(row);
-    Box::into_raw(Box::new(names)) as RowColumnNamesArrayPtr
+    let ptr = names.as_ptr();
+    mem::forget(names);
+    ptr
 }
 
 #[cfg(test)]

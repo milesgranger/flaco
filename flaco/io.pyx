@@ -14,7 +14,7 @@ cpdef int read_sql(str stmt, Engine engine):
     cdef lib.RowColumnNamesArrayPtr row_col_names
     cdef lib.RowTypesArrayPtr row_types
     cdef lib.RowDataArrayPtr row_data
-    cdef char **row_col_names_view = <char**>malloc(2 * sizeof(char*))
+    cdef char** col_names
 
     row_iterator = lib.read_sql(<char*>stmt_bytes, engine.client_ptr)
 
@@ -24,11 +24,11 @@ cpdef int read_sql(str stmt, Engine engine):
     # get column names and types
     row_types = lib.row_types(row)
     row_col_names = lib.row_column_names(row)
-    row_col_names_view = row_col_names
+    col_names = row_col_names
 
     cdef int i
-    for i in range(0, 1):
-        print(row_col_names_view[i])
+    for i in range(0, 2):
+        print(col_names[i])
     print("Done")
     # Begin looping until no rows are returned
     while True:
@@ -44,7 +44,7 @@ cpdef int read_sql(str stmt, Engine engine):
         #    return data.int64._0
         #else:
         #    return 0
-    free(row_col_names_view)
+    #free(row_col_names_view)
     lib.drop(row_iterator)
     lib.drop(row)
     lib.drop(row_types)
