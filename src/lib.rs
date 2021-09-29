@@ -1,7 +1,7 @@
 //#![warn(missing_docs)]
 use postgres as pg;
 use postgres::fallible_iterator::FallibleIterator;
-use postgres::RowIter;
+use postgres::{RowIter};
 use std::os::raw::c_char;
 use std::{ffi, mem};
 
@@ -113,6 +113,14 @@ pub extern "C" fn row_types(row_ptr: RowPtr) -> RowTypesArrayPtr {
         .collect::<Vec<ffi::CString>>();
     mem::forget(row);
     Box::into_raw(Box::new(names)) as RowTypesArrayPtr
+}
+
+#[no_mangle]
+pub extern "C" fn n_columns(row_ptr: RowPtr) -> u32 {
+    let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row)};
+    let len = row.len() as u32;
+    mem::forget(row);
+    len
 }
 
 #[no_mangle]

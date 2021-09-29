@@ -40,6 +40,8 @@ cdef extern from "./libflaco.h":
 
     void drop(np.uint32_t *ptr)
 
+    np.uint32_t n_columns(RowPtr row_ptr)
+
     RowPtr next_row(RowIteratorPtr row_iter_ptr)
 
     RowIteratorPtr read_sql(const char *stmt_ptr, np.uint32_t *engine_ptr)
