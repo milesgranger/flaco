@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 postgres = "0.19.1"
+postgres-types = "0.2.1"
 
 [build-dependencies]
 cbindgen = "^0.6.0"

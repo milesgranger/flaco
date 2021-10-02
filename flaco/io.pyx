@@ -1,27 +1,69 @@
 cimport numpy as np
 import numpy as np
-from libc.stdlib cimport malloc
-from flaco.includes cimport read_sql as _read_sql, Data, Data_Tag, free_engine, create_engine
+from libc.stdlib cimport malloc, free
+from cython cimport view
+from flaco cimport includes as lib
 
 np.import_array()
 
 
 cpdef int read_sql(str stmt, Engine engine):
-    cdef Data result
     cdef bytes stmt_bytes = stmt.encode("utf-8")
-    result = _read_sql(<char*>stmt_bytes, engine.client_ptr)
+    cdef lib.RowIteratorPtr row_iterator
+    cdef lib.RowPtr row
+    cdef lib.RowColumnNamesArrayPtr row_col_names
+    cdef lib.RowTypesArrayPtr row_types
+    cdef lib.RowDataArrayPtr row_data
+    cdef np.uint32_t n_columns
 
-    if result.tag == Data_Tag.Int64:
-        return result.int64._0
-    else:
-        return 0
+    row_iterator = lib.read_sql(<char*>stmt_bytes, engine.client_ptr)
+
+    # Read first row
+    row = lib.next_row(row_iterator)
+
+    # get column names and types
+    row_types = lib.row_types(row)
+    row_col_names = lib.row_column_names(row)
+    n_columns = lib.n_columns(row)
+
+    # build columns
+    columns = np.zeros(shape=n_columns, dtype=object)
+    cdef int i
+    for i in range(0, n_columns):
+        print(row_col_names[i])
+        columns[i] = row_col_names[i].decode()
+    print(f"Done, columns: {columns}")
+
+    # build arrays based on types
+    for i in range(0, n_columns):
+        print(row_types[i])
+
+    # Begin looping until no rows are returned
+    while True:
+        if row == NULL:
+            break
+        else:
+            row_data = lib.row_data(row, row_types)
+            lib.drop(row)
+
+        row = lib.next_row(row_iterator)
+
+        #if data.tag == Data_Tag.Int64:
+        #    return data.int64._0
+        #else:
+        #    return 0
+    #free(row_col_names_view)
+    lib.drop(row_iterator)
+    lib.drop(row)
+    #lib.drop(row_types)
+    #lib.drop(row_col_names)
+    return 1
 
 cdef resize(np.ndarray array, int len):
     array.resize(len)
 
 cdef np.ndarray array_init(int len, np.dtype dtype):
     return np.empty(len, dtype=dtype)
-
 
 cdef class Engine:
 
@@ -34,8 +76,8 @@ cdef class Engine:
 
     cdef _create_engine(self):
         self.client_ptr = <np.uint32_t*>malloc(sizeof(np.uint32_t))
-        self.client_ptr = create_engine(<char*>self.uri)
+        self.client_ptr = lib.create_engine(<char*>self.uri)
 
     def __dealloc__(self):
         if &self.client_ptr != NULL:
-            free_engine(self.client_ptr)
+            lib.drop(self.client_ptr)
