@@ -130,7 +130,10 @@ pub extern "C" fn row_data(row_ptr: RowPtr) -> RowDataArrayPtr {
                 };
                 Data::String(ptr)
             }
-            _ => unimplemented!("Unsupported type: {:?}", type_),
+            _ => {
+                eprintln!("Unsupported PostgreSQL type: {:?}", type_);
+                return std::ptr::null::<Data>() as RowDataArrayPtr;
+            }
         };
         values.push(val)
     }

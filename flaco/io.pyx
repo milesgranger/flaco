@@ -42,6 +42,8 @@ cpdef tuple read_sql(str stmt, Engine engine):
 
             # Insert new row
             row_data_ptr = lib.row_data(row_ptr)
+            if row_data_ptr == NULL:
+                raise TypeError(f"Unable to pull row data, likely an unsupported type. Check stderr output.")
 
             if row_idx == 0:
                 # Initialize arrays for output
