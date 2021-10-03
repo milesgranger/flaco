@@ -73,6 +73,10 @@ pub extern "C" fn read_sql(stmt_ptr: *const c_char, engine_ptr: *mut u32) -> Row
     mem::forget(engine);
     ptr
 }
+#[no_mangle]
+pub extern "C" fn free_row_iter(ptr: RowIteratorPtr) {
+    let _ = unsafe { Box::from_raw(ptr as *mut pg::RowIter) };
+}
 
 #[no_mangle]
 pub extern "C" fn next_row(row_iter_ptr: RowIteratorPtr) -> RowPtr {
@@ -83,6 +87,10 @@ pub extern "C" fn next_row(row_iter_ptr: RowIteratorPtr) -> RowPtr {
     };
     mem::forget(row_iter);
     ptr
+}
+#[no_mangle]
+pub extern "C" fn free_row(ptr: RowPtr) {
+    let _ = unsafe { Box::from_raw(ptr as *mut pg::Row) };
 }
 
 #[no_mangle]
@@ -142,6 +150,11 @@ pub extern "C" fn row_data(row_ptr: RowPtr) -> RowDataArrayPtr {
 }
 
 #[no_mangle]
+pub extern "C" fn free_row_data_array(ptr: RowDataArrayPtr) {
+    let _ = unsafe { Box::from_raw(ptr as *mut Vec<Data>) };
+}
+
+#[no_mangle]
 pub extern "C" fn n_columns(row_ptr: RowPtr) -> u32 {
     let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row) };
     let len = row.len() as u32;
@@ -167,6 +180,11 @@ pub extern "C" fn row_column_names(row_ptr: RowPtr) -> RowColumnNamesArrayPtr {
     let ptr = names.as_ptr();
     mem::forget(names);
     ptr
+}
+
+#[no_mangle]
+pub extern "C" fn free_row_column_names(ptr: RowColumnNamesArrayPtr) {
+    let _names = unsafe { Box::from_raw(ptr as *mut Vec<*const c_char>) };
 }
 
 #[no_mangle]

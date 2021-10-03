@@ -60,6 +60,8 @@ cpdef tuple read_sql(str stmt, Engine engine):
                 data = lib.index_row(row_data_ptr, i)
                 insert_data_into_array(data, output[i], row_idx)
 
+            lib.free_row_data_array(row_data_ptr)
+            lib.free_row(row_ptr)
             row_idx += 1
 
         row_ptr = lib.next_row(row_iterator)
@@ -68,6 +70,10 @@ cpdef tuple read_sql(str stmt, Engine engine):
     if output[0].shape[0] != row_idx:
         for i in range(0, n_columns):
             resize(output[i], row_idx)
+
+    lib.free_row_iter(row_iterator)
+    lib.free_row_column_names(row_col_names)
+
     return columns, output
 
 cdef resize(np.ndarray array, int len):

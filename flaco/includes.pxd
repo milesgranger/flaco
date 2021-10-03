@@ -49,11 +49,15 @@ cdef extern from "./libflaco.h":
     np.uint32_t n_columns(RowPtr row_ptr)
 
     RowPtr next_row(RowIteratorPtr row_iter_ptr)
+    void free_row(RowPtr ptr);
 
     RowIteratorPtr read_sql(const char *stmt_ptr, np.uint32_t *engine_ptr)
+    void free_row_iter(RowIteratorPtr ptr);
 
     RowColumnNamesArrayPtr row_column_names(RowPtr row_ptr)
+    void free_row_column_names(RowColumnNamesArrayPtr ptr)
 
     RowDataArrayPtr row_data(RowPtr row_ptr)
+    void free_row_data_array(RowDataArrayPtr ptr)
 
     Data index_row(RowPtr row_ptr, np.uint32_t idx)
