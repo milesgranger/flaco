@@ -1,7 +1,7 @@
 //#![warn(missing_docs)]
 use postgres as pg;
 use postgres::fallible_iterator::FallibleIterator;
-use postgres::{RowIter};
+use postgres::RowIter;
 use std::os::raw::c_char;
 use std::{ffi, mem};
 
@@ -34,6 +34,7 @@ pub enum Data {
     Float32(f32),
     Float64(f64),
     String(*const c_char),
+    Null,
 }
 
 #[no_mangle]
@@ -88,9 +89,8 @@ pub extern "C" fn next_row(row_iter_ptr: RowIteratorPtr) -> RowPtr {
 #[no_mangle]
 pub extern "C" fn row_data(row_ptr: RowPtr, row_types_ptr: RowTypesArrayPtr) -> RowDataArrayPtr {
     let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row) };
-    let row_types: Vec<*const c_char> = unsafe {
-        Vec::from_raw_parts(row_types_ptr as *mut _, row.len(), row.len())
-    };
+    let row_types: Vec<*const c_char> =
+        unsafe { Vec::from_raw_parts(row_types_ptr as *mut _, row.len(), row.len()) };
     let len = row.len();
     let mut values = Vec::with_capacity(len);
     for i in 0..len {
@@ -100,15 +100,39 @@ pub extern "C" fn row_data(row_ptr: RowPtr, row_types_ptr: RowTypesArrayPtr) -> 
         // TODO: postgres-types: expose Inner enum which these variations
         // and have postgres Row.type/(or something) expose the variant
         let val = match type_.to_bytes() {
-            b"int4" | b"int" | b"serial" => Data::Int32(row.get(i)),
-            b"bigint" | b"bigserial" => Data::Int64(row.get(i)),
-            b"double precision" => Data::Float64(row.get(i)),
-            b"real" => Data::Float32(row.get(i)),
+            b"int4" | b"int" | b"serial" => {
+                let val: Option<i32> = row.get(i);
+                match val {
+                    Some(v) => Data::Int32(v),
+                    None => Data::Null,
+                }
+            }
+            b"bigint" | b"bigserial" => {
+                let val: Option<i64> = row.get(i);
+                match val {
+                    Some(v) => Data::Int64(v),
+                    None => Data::Null,
+                }
+            }
+            b"double precision" => {
+                let val: Option<f64> = row.get(i);
+                Data::Float64(val.unwrap_or_else(|| f64::NAN))
+            }
+            b"real" => {
+                let val: Option<f32> = row.get(i);
+                Data::Float32(val.unwrap_or_else(|| f32::NAN))
+            }
             b"varchar" | b"char" | b"text" | b"citext" | b"name" | b"unknown" => {
-                let string: String = row.get(i);
-                let cstring = ffi::CString::new(string).unwrap();
-                let ptr = cstring.as_ptr();
-                mem::forget(cstring);
+                let string: Option<String> = row.get(i);
+                let ptr = match string {
+                    Some(string) => {
+                        let cstring = ffi::CString::new(string).unwrap();
+                        let ptr = cstring.as_ptr();
+                        mem::forget(cstring);
+                        ptr
+                    }
+                    None => std::ptr::null(),
+                };
                 Data::String(ptr)
             }
             _ => unimplemented!("Unsupported type: {:?}", type_),
@@ -142,7 +166,7 @@ pub extern "C" fn row_types(row_ptr: RowPtr) -> RowTypesArrayPtr {
 
 #[no_mangle]
 pub extern "C" fn n_columns(row_ptr: RowPtr) -> u32 {
-    let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row)};
+    let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row) };
     let len = row.len() as u32;
     mem::forget(row);
     len

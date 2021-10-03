@@ -9,12 +9,13 @@ cdef extern from "./libflaco.h":
         Float32
         Float64
         String
+        Null
 
     ctypedef struct Int32_Body:
-        np.int32_t _0
+        const np.int32_t _0
 
     ctypedef struct Int64_Body:
-        np.int64_t _0
+        const np.int64_t _0
 
     ctypedef struct Float32_Body:
         np.float32_t _0
