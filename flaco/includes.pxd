@@ -4,8 +4,9 @@ from libcpp cimport bool
 cdef extern from "./libflaco.h":
 
     ctypedef enum Data_Tag:
-        Int64
         Int32
+        Int64
+        Float32
         Float64
         String
 
@@ -55,4 +56,7 @@ cdef extern from "./libflaco.h":
 
     RowDataArrayPtr row_data(RowPtr row_ptr, RowTypesArrayPtr row_types_ptr)
 
+    Data index_row(RowPtr row_ptr, np.uint32_t idx)
+
     RowTypesArrayPtr row_types(RowPtr row_ptr)
+
