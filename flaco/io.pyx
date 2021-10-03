@@ -56,25 +56,7 @@ cpdef tuple read_sql(str stmt, Engine engine):
 
             for i in range(0, n_columns):
                 data = lib.index_row(row_data_ptr, i)
-                if data.tag == lib.Data_Tag.Int64:
-                    output[i][row_idx] = data.int64._0
-
-                elif data.tag == lib.Data_Tag.Int32:
-                    output[i][row_idx] = data.int32._0
-
-                elif data.tag == lib.Data_Tag.Float64:
-                    output[i][row_idx] = data.float64._0
-
-                elif data.tag == lib.Data_Tag.Float32:
-                    output[i][row_idx] = data.float32._0
-
-                elif data.tag == lib.Data_Tag.String:
-                    if data.string._0 == NULL:
-                        output[i][row_idx] = None
-                    else:
-                        output[i][row_idx] = data.string._0.decode()
-                elif data.tag == lib.Data_Tag.Null:
-                    output[i][row_idx] = None
+                insert_data_into_array(data, output[i], row_idx)
 
             row_idx += 1
 
@@ -104,6 +86,33 @@ cdef np.ndarray array_init(lib.Data data, int len):
     else:
         raise ValueError(f"Unsupported tag: {data.tag}")
     return array
+
+cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
+
+    if data.tag == lib.Data_Tag.Int64:
+        arr[idx] = data.int64._0
+
+    elif data.tag == lib.Data_Tag.Int32:
+        arr[idx] = data.int32._0
+
+    elif data.tag == lib.Data_Tag.Float64:
+        arr[idx] = data.float64._0
+
+    elif data.tag == lib.Data_Tag.Float32:
+        arr[idx] = data.float32._0
+
+    elif data.tag == lib.Data_Tag.String:
+        if data.string._0 == NULL:
+            arr[idx] = None
+        else:
+            arr[idx] = data.string._0.decode()
+
+    elif data.tag == lib.Data_Tag.Null:
+        arr[idx] = None
+
+    else:
+        raise ValueError(f"Unsupported Data enum {data.tag}")
+
 
 cdef class Engine:
 
