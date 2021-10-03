@@ -29,7 +29,7 @@ def test_large_table(postgresdb, postgresdb_connection_uri):
     df["col3"] = np.random.random(size=size)
 
     df.to_sql("test_large_table", con=postgresdb, index=False)
-
+    breakpoint()
     engine = Engine(postgresdb_connection_uri)
 
     scope = locals()
