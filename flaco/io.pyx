@@ -39,6 +39,10 @@ cpdef tuple read_sql(str stmt, Engine engine):
     for i in range(0, n_columns):
         print(row_types[i])
 
+    # np.ndarray would force all internal arrays to be object dtypes
+    # b/c each array has a different dtype.
+    cdef list output = []
+
     # Begin looping until no rows are returned
     cdef int row_idx = 0
     while True:
@@ -51,7 +55,6 @@ cpdef tuple read_sql(str stmt, Engine engine):
 
             if row_idx == 0:
                 # Initialize arrays for output
-                output = []
                 for i in range(0, n_columns):
                     data = lib.index_row(row_data_ptr, i)
                     output.append(array_init(data, 10))
