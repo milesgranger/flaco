@@ -7,7 +7,7 @@ from flaco cimport includes as lib
 np.import_array()
 
 
-cpdef int read_sql(str stmt, Engine engine):
+cpdef tuple read_sql(str stmt, Engine engine):
     cdef bytes stmt_bytes = stmt.encode("utf-8")
     cdef lib.RowIteratorPtr row_iterator
     cdef lib.RowPtr row
@@ -77,10 +77,15 @@ cpdef int read_sql(str stmt, Engine engine):
 
         row = lib.next_row(row_iterator)
 
-    return 1
+    # Ensure arrays are correct size
+    if output[0].shape[0] != row_idx:
+        for i in range(0, n_columns):
+            resize(output[i], row_idx)
+
+    return columns, output
 
 cdef resize(np.ndarray array, int len):
-    array.resize(len)
+    array.resize(len, refcheck=False)
 
 cdef np.ndarray array_init(lib.Data data, int len):
     cdef np.ndarray array
