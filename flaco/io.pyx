@@ -1,9 +1,6 @@
-import pandas as pd
-cimport cython
 cimport numpy as np
 import numpy as np
-from libc.stdlib cimport malloc, free
-from cython cimport view
+from libc.stdlib cimport malloc
 from flaco cimport includes as lib
 
 np.import_array()
@@ -11,26 +8,21 @@ np.import_array()
 
 cpdef tuple read_sql(str stmt, Engine engine):
     cdef bytes stmt_bytes = stmt.encode("utf-8")
-    cdef lib.RowIteratorPtr row_iterator
-    cdef lib.RowPtr row_ptr
-    cdef lib.RowColumnNamesArrayPtr row_col_names
-    cdef lib.RowTypesArrayPtr row_types
-    cdef lib.RowDataArrayPtr row_data_ptr
-    cdef lib.Data data
-    cdef np.uint32_t n_columns
 
-    row_iterator = lib.read_sql(<char*>stmt_bytes, engine.client_ptr)
+    cdef lib.RowIteratorPtr row_iterator = lib.read_sql(
+        <char*>stmt_bytes, engine.client_ptr
+    )
 
     # Read first row
-    row_ptr = lib.next_row(row_iterator)
+    cdef lib.RowPtr row_ptr = lib.next_row(row_iterator)
 
-    # get column names and types
-    row_types = lib.row_types(row_ptr)
-    row_col_names = lib.row_column_names(row_ptr)
-    n_columns = lib.n_columns(row_ptr)
+    # get column names and row len
+    cdef lib.RowColumnNamesArrayPtr row_col_names = lib.row_column_names(row_ptr)
+    cdef np.uint32_t n_columns = lib.n_columns(row_ptr)
 
     # build columns
-    columns = np.zeros(shape=n_columns, dtype=object)
+    cdef np.ndarray columns = np.zeros(shape=n_columns, dtype=object)
+
     cdef int i
     for i in range(0, n_columns):
         columns[i] = row_col_names[i].decode()
@@ -41,13 +33,15 @@ cpdef tuple read_sql(str stmt, Engine engine):
 
     # Begin looping until no rows are returned
     cdef int row_idx = 0
+    cdef lib.RowDataArrayPtr row_data_ptr
+    cdef lib.Data data
     while True:
         if row_ptr == NULL:
             break
         else:
 
             # Insert new row
-            row_data_ptr = lib.row_data(row_ptr, row_types)
+            row_data_ptr = lib.row_data(row_ptr)
 
             if row_idx == 0:
                 # Initialize arrays for output

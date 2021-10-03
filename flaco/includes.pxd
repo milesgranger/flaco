@@ -1,5 +1,5 @@
 cimport numpy as np
-from libcpp cimport bool
+
 
 cdef extern from "./libflaco.h":
 
@@ -39,7 +39,6 @@ cdef extern from "./libflaco.h":
     ctypedef np.uint32_t *RowPtr
     ctypedef char **RowColumnNamesArrayPtr
     ctypedef np.uint32_t *RowDataArrayPtr
-    ctypedef char **RowTypesArrayPtr
 
     RowIteratorPtr read_sql(char *stmt_ptr, np.uint32_t *engine_ptr)
 
@@ -55,9 +54,6 @@ cdef extern from "./libflaco.h":
 
     RowColumnNamesArrayPtr row_column_names(RowPtr row_ptr)
 
-    RowDataArrayPtr row_data(RowPtr row_ptr, RowTypesArrayPtr row_types_ptr)
+    RowDataArrayPtr row_data(RowPtr row_ptr)
 
     Data index_row(RowPtr row_ptr, np.uint32_t idx)
-
-    RowTypesArrayPtr row_types(RowPtr row_ptr)
-
