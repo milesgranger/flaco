@@ -49,12 +49,12 @@ cpdef tuple read_sql(str stmt, Engine engine):
                 # Initialize arrays for output
                 for i in range(0, n_columns):
                     data = lib.index_row(row_data_ptr, i)
-                    output.append(array_init(data, 10))
+                    output.append(array_init(data, 1_000))
 
             # grow arrays if next insert is passed current len
-            if output[0].shape[0] < row_idx:
+            if output[0].shape[0] <= row_idx:
                 for i in range(0, n_columns):
-                    resize(output[i], output[0].shape[0] + 1000)
+                    resize(output[i], output[0].shape[0] + 1_000)
 
             for i in range(0, n_columns):
                 data = lib.index_row(row_data_ptr, i)
