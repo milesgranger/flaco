@@ -2,6 +2,7 @@ import pathlib
 import numpy as np
 from setuptools import setup, Extension
 from Cython.Build import cythonize
+from Cython.Distutils import build_ext
 
 extension = Extension(
     name="*",
@@ -10,8 +11,9 @@ extension = Extension(
     include_dirs=[np.get_include(), "flaco"],
     library_dirs=[
         str(pathlib.Path("target/release")),
-        str(pathlib.Path("target/debug")),
     ],
+    extra_compile_args=["-fopenmp", "-O3"],
+    extra_link_args=[]
 )
 
 setup(
@@ -26,6 +28,7 @@ setup(
         "hypothesis",
         "pandas",
     ],
+    cmdclass = {"build_ext": build_ext},
     install_requires=["numpy"],
     ext_modules=cythonize(extension),
     include_dirs=[np.get_include(), "flaco"],
