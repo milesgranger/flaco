@@ -6,8 +6,8 @@ use std::os::raw::c_char;
 use std::{ffi, mem};
 
 type RowIteratorPtr = *mut u32;
-type RowPtr = *const u32;
-type RowDataArrayPtr = *const u32;
+type RowPtr = *mut u32;
+type RowDataArrayPtr = *mut u32;
 type RowTypesArrayPtr = *const *const c_char;
 type RowColumnNamesArrayPtr = *const *const c_char;
 
@@ -26,6 +26,7 @@ impl Engine {
     }
 }
 
+#[derive(Clone, Debug)]
 #[repr(C)]
 pub enum Data {
     Int32(i32),
@@ -34,8 +35,6 @@ pub enum Data {
     Float64(f64),
     String(*const c_char),
 }
-
-#[repr()]
 
 #[no_mangle]
 pub extern "C" fn create_engine(uri_ptr: *const c_char) -> *mut u32 {
@@ -80,7 +79,7 @@ pub extern "C" fn next_row(row_iter_ptr: RowIteratorPtr) -> RowPtr {
     let mut row_iter = unsafe { Box::from_raw(row_iter_ptr as *mut RowIter) };
     let ptr = match row_iter.next().unwrap() {
         Some(row) => Box::into_raw(Box::new(row)) as RowPtr,
-        None => std::ptr::null(),
+        None => std::ptr::null_mut(),
     };
     mem::forget(row_iter);
     ptr
@@ -167,6 +166,14 @@ pub extern "C" fn row_column_names(row_ptr: RowPtr) -> RowColumnNamesArrayPtr {
     let ptr = names.as_ptr();
     mem::forget(names);
     ptr
+}
+
+#[no_mangle]
+pub extern "C" fn index_row(row_ptr: RowDataArrayPtr, idx: u32) -> Data {
+    let row = unsafe { Box::from_raw(row_ptr as *mut Vec<Data>) };
+    let data = row[idx as usize].clone();
+    mem::forget(row);
+    data
 }
 
 #[cfg(test)]
