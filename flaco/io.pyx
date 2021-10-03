@@ -1,9 +1,6 @@
-import pandas as pd
-cimport cython
 cimport numpy as np
 import numpy as np
-from libc.stdlib cimport malloc, free
-from cython cimport view
+from libc.stdlib cimport malloc
 from flaco cimport includes as lib
 
 np.import_array()
@@ -11,26 +8,21 @@ np.import_array()
 
 cpdef tuple read_sql(str stmt, Engine engine):
     cdef bytes stmt_bytes = stmt.encode("utf-8")
-    cdef lib.RowIteratorPtr row_iterator
-    cdef lib.RowPtr row_ptr
-    cdef lib.RowColumnNamesArrayPtr row_col_names
-    cdef lib.RowTypesArrayPtr row_types
-    cdef lib.RowDataArrayPtr row_data_ptr
-    cdef lib.Data data
-    cdef np.uint32_t n_columns
 
-    row_iterator = lib.read_sql(<char*>stmt_bytes, engine.client_ptr)
+    cdef lib.RowIteratorPtr row_iterator = lib.read_sql(
+        <char*>stmt_bytes, engine.client_ptr
+    )
 
     # Read first row
-    row_ptr = lib.next_row(row_iterator)
+    cdef lib.RowPtr row_ptr = lib.next_row(row_iterator)
 
-    # get column names and types
-    row_types = lib.row_types(row_ptr)
-    row_col_names = lib.row_column_names(row_ptr)
-    n_columns = lib.n_columns(row_ptr)
+    # get column names and row len
+    cdef lib.RowColumnNamesArrayPtr row_col_names = lib.row_column_names(row_ptr)
+    cdef np.uint32_t n_columns = lib.n_columns(row_ptr)
 
     # build columns
-    columns = np.zeros(shape=n_columns, dtype=object)
+    cdef np.ndarray columns = np.zeros(shape=n_columns, dtype=object)
+
     cdef int i
     for i in range(0, n_columns):
         columns[i] = row_col_names[i].decode()
@@ -41,47 +33,35 @@ cpdef tuple read_sql(str stmt, Engine engine):
 
     # Begin looping until no rows are returned
     cdef int row_idx = 0
+    cdef lib.RowDataArrayPtr row_data_ptr
+    cdef lib.Data data
     while True:
         if row_ptr == NULL:
             break
         else:
 
             # Insert new row
-            row_data_ptr = lib.row_data(row_ptr, row_types)
+            row_data_ptr = lib.row_data(row_ptr)
+            if row_data_ptr == NULL:
+                raise TypeError(f"Unable to pull row data, likely an unsupported type. Check stderr output.")
 
             if row_idx == 0:
                 # Initialize arrays for output
                 for i in range(0, n_columns):
                     data = lib.index_row(row_data_ptr, i)
-                    output.append(array_init(data, 10))
+                    output.append(array_init(data, 1_000))
 
             # grow arrays if next insert is passed current len
-            if output[0].shape[0] < row_idx:
+            if output[0].shape[0] <= row_idx:
                 for i in range(0, n_columns):
-                    resize(output[i], output[0].shape[0] + 1000)
+                    resize(output[i], output[i].shape[0] + 1_000)
 
             for i in range(0, n_columns):
                 data = lib.index_row(row_data_ptr, i)
-                if data.tag == lib.Data_Tag.Int64:
-                    output[i][row_idx] = data.int64._0
+                insert_data_into_array(data, output[i], row_idx)
 
-                elif data.tag == lib.Data_Tag.Int32:
-                    output[i][row_idx] = data.int32._0
-
-                elif data.tag == lib.Data_Tag.Float64:
-                    output[i][row_idx] = data.float64._0
-
-                elif data.tag == lib.Data_Tag.Float32:
-                    output[i][row_idx] = data.float32._0
-
-                elif data.tag == lib.Data_Tag.String:
-                    if data.string._0 == NULL:
-                        output[i][row_idx] = None
-                    else:
-                        output[i][row_idx] = data.string._0
-                elif data.tag == lib.Data_Tag.Null:
-                    output[i][row_idx] = None
-
+            lib.free_row_data_array(row_data_ptr)
+            lib.free_row(row_ptr)
             row_idx += 1
 
         row_ptr = lib.next_row(row_iterator)
@@ -90,6 +70,10 @@ cpdef tuple read_sql(str stmt, Engine engine):
     if output[0].shape[0] != row_idx:
         for i in range(0, n_columns):
             resize(output[i], row_idx)
+
+    lib.free_row_iter(row_iterator)
+    lib.free_row_column_names(row_col_names)
+
     return columns, output
 
 cdef resize(np.ndarray array, int len):
@@ -110,6 +94,33 @@ cdef np.ndarray array_init(lib.Data data, int len):
     else:
         raise ValueError(f"Unsupported tag: {data.tag}")
     return array
+
+cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
+
+    if data.tag == lib.Data_Tag.Int64:
+        arr[idx] = data.int64._0
+
+    elif data.tag == lib.Data_Tag.Int32:
+        arr[idx] = data.int32._0
+
+    elif data.tag == lib.Data_Tag.Float64:
+        arr[idx] = data.float64._0
+
+    elif data.tag == lib.Data_Tag.Float32:
+        arr[idx] = data.float32._0
+
+    elif data.tag == lib.Data_Tag.String:
+        if data.string._0 == NULL:
+            arr[idx] = None
+        else:
+            arr[idx] = data.string._0.decode()
+
+    elif data.tag == lib.Data_Tag.Null:
+        arr[idx] = None
+
+    else:
+        raise ValueError(f"Unsupported Data enum {data.tag}")
+
 
 cdef class Engine:
 

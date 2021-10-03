@@ -8,7 +8,6 @@ use std::{ffi, mem};
 type RowIteratorPtr = *mut u32;
 type RowPtr = *mut u32;
 type RowDataArrayPtr = *mut u32;
-type RowTypesArrayPtr = *const *const c_char;
 type RowColumnNamesArrayPtr = *const *const c_char;
 
 /// Supports creating connections to a given connection URI
@@ -74,6 +73,10 @@ pub extern "C" fn read_sql(stmt_ptr: *const c_char, engine_ptr: *mut u32) -> Row
     mem::forget(engine);
     ptr
 }
+#[no_mangle]
+pub extern "C" fn free_row_iter(ptr: RowIteratorPtr) {
+    let _ = unsafe { Box::from_raw(ptr as *mut pg::RowIter) };
+}
 
 #[no_mangle]
 pub extern "C" fn next_row(row_iter_ptr: RowIteratorPtr) -> RowPtr {
@@ -85,44 +88,44 @@ pub extern "C" fn next_row(row_iter_ptr: RowIteratorPtr) -> RowPtr {
     mem::forget(row_iter);
     ptr
 }
+#[no_mangle]
+pub extern "C" fn free_row(ptr: RowPtr) {
+    let _ = unsafe { Box::from_raw(ptr as *mut pg::Row) };
+}
 
 #[no_mangle]
-pub extern "C" fn row_data(row_ptr: RowPtr, row_types_ptr: RowTypesArrayPtr) -> RowDataArrayPtr {
+pub extern "C" fn row_data(row_ptr: RowPtr) -> RowDataArrayPtr {
     let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row) };
-    let row_types: Vec<*const c_char> =
-        unsafe { Vec::from_raw_parts(row_types_ptr as *mut _, row.len(), row.len()) };
     let len = row.len();
     let mut values = Vec::with_capacity(len);
     for i in 0..len {
-        // TODO: check if it's faster to re-iterate over row for type name
-        let type_ptr = unsafe { row_types.get_unchecked(i) };
-        let type_ = unsafe { ffi::CStr::from_ptr(*type_ptr) };
+        let type_ = row.columns()[i].type_();
         // TODO: postgres-types: expose Inner enum which these variations
         // and have postgres Row.type/(or something) expose the variant
-        let val = match type_.to_bytes() {
-            b"int4" | b"int" | b"serial" => {
+        let val = match type_.name() {
+            "int4" | "int" | "serial" => {
                 let val: Option<i32> = row.get(i);
                 match val {
                     Some(v) => Data::Int32(v),
                     None => Data::Null,
                 }
             }
-            b"bigint" | b"bigserial" => {
+            "bigint" | "int8" | "bigserial" => {
                 let val: Option<i64> = row.get(i);
                 match val {
                     Some(v) => Data::Int64(v),
                     None => Data::Null,
                 }
             }
-            b"double precision" => {
+            "double precision" | "float8" => {
                 let val: Option<f64> = row.get(i);
                 Data::Float64(val.unwrap_or_else(|| f64::NAN))
             }
-            b"real" => {
+            "real" => {
                 let val: Option<f32> = row.get(i);
                 Data::Float32(val.unwrap_or_else(|| f32::NAN))
             }
-            b"varchar" | b"char" | b"text" | b"citext" | b"name" | b"unknown" => {
+            "varchar" | "char" | "text" | "citext" | "name" | "unknown" => {
                 let string: Option<String> = row.get(i);
                 let ptr = match string {
                     Some(string) => {
@@ -135,33 +138,20 @@ pub extern "C" fn row_data(row_ptr: RowPtr, row_types_ptr: RowTypesArrayPtr) -> 
                 };
                 Data::String(ptr)
             }
-            _ => unimplemented!("Unsupported type: {:?}", type_),
+            _ => {
+                eprintln!("Unsupported PostgreSQL type: {:?}", type_);
+                return std::ptr::null::<Data>() as RowDataArrayPtr;
+            }
         };
         values.push(val)
     }
     mem::forget(row);
-    mem::forget(row_types);
     Box::into_raw(Box::new(values)) as RowDataArrayPtr
 }
 
 #[no_mangle]
-pub extern "C" fn row_types(row_ptr: RowPtr) -> RowTypesArrayPtr {
-    let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row) };
-    let types = row
-        .columns()
-        .iter()
-        .map(|col| col.type_().name().to_string())
-        .map(|name| {
-            let name = ffi::CString::new(name).unwrap();
-            let ptr = name.as_ptr();
-            mem::forget(name);
-            ptr
-        })
-        .collect::<Vec<*const c_char>>();
-    mem::forget(row);
-    let ptr = types.as_ptr();
-    mem::forget(types);
-    ptr
+pub extern "C" fn free_row_data_array(ptr: RowDataArrayPtr) {
+    let _ = unsafe { Box::from_raw(ptr as *mut Vec<Data>) };
 }
 
 #[no_mangle]
@@ -190,6 +180,11 @@ pub extern "C" fn row_column_names(row_ptr: RowPtr) -> RowColumnNamesArrayPtr {
     let ptr = names.as_ptr();
     mem::forget(names);
     ptr
+}
+
+#[no_mangle]
+pub extern "C" fn free_row_column_names(ptr: RowColumnNamesArrayPtr) {
+    let _names = unsafe { Box::from_raw(ptr as *mut Vec<*const c_char>) };
 }
 
 #[no_mangle]
