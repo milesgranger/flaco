@@ -107,7 +107,7 @@ pub extern "C" fn row_data(row_ptr: RowPtr, row_types_ptr: RowTypesArrayPtr) -> 
                     None => Data::Null,
                 }
             }
-            b"bigint" | b"bigserial" => {
+            b"bigint" | b"int8" | b"bigserial" => {
                 let val: Option<i64> = row.get(i);
                 match val {
                     Some(v) => Data::Int64(v),

@@ -78,7 +78,7 @@ cpdef tuple read_sql(str stmt, Engine engine):
                     if data.string._0 == NULL:
                         output[i][row_idx] = None
                     else:
-                        output[i][row_idx] = data.string._0
+                        output[i][row_idx] = data.string._0.decode()
                 elif data.tag == lib.Data_Tag.Null:
                     output[i][row_idx] = None
 
