@@ -13,7 +13,7 @@ extension = Extension(
         str(pathlib.Path("target/release")),
     ],
     extra_compile_args=["-fopenmp", "-O3"],
-    extra_link_args=[]
+    extra_link_args=["-l:libflaco.a"]
 )
 
 setup(

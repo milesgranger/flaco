@@ -1,6 +1,6 @@
 import pandas as pd
 from sqlalchemy import create_engine
-from flaco import Engine, read_sql
+from flaco.io import Engine, read_sql
 from memory_profiler import profile
 
 @profile
