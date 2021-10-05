@@ -27,8 +27,20 @@ impl Connection {
 
 #[derive(Clone, Debug)]
 #[repr(C)]
+pub struct BytesPtr {
+    ptr: *const u32,
+    len: u32
+}
+
+#[derive(Clone, Debug)]
+#[repr(C)]
 pub enum Data {
+    Bytes(BytesPtr),
+    Boolean(bool),
+    Int8(i8),
+    Int16(i16),
     Int32(i32),
+    Uint32(u32),
     Int64(i64),
     Float32(f32),
     Float64(f64),
@@ -102,7 +114,41 @@ pub extern "C" fn row_data(row_ptr: RowPtr) -> RowDataArrayPtr {
         let type_ = row.columns()[i].type_();
         // TODO: postgres-types: expose Inner enum which these variations
         // and have postgres Row.type/(or something) expose the variant
+        println!("{}", type_.name());
         let val = match type_.name() {
+            "bytea" => {
+                let val: Option<Vec<u8>> = row.get(i);
+                match val {
+                    Some(v) => {
+                        let ptr = v.as_ptr() as *mut u32;
+                        let len = v.len() as u32;
+                        mem::forget(v);
+                        Data::Bytes(BytesPtr { ptr, len })
+                    },
+                    None => Data::Null
+                }
+            }
+            "char" => {
+                let val: Option<i8> = row.get(i);
+                match val {
+                    Some(v) => Data::Int8(v),
+                    None => Data::Null
+                }
+            }
+            "smallint" | "smallserial" | "int2" => {
+                let val: Option<i16> = row.get(i);
+                match val {
+                    Some(v) => Data::Int16(v),
+                    None => Data::Null
+                }
+            }
+            "oid" => {
+                let val: Option<u32> = row.get(i);
+                match val {
+                    Some(v) => Data::Uint32(v),
+                    None => Data::Null
+                }
+            }
             "int4" | "int" | "serial" => {
                 let val: Option<i32> = row.get(i);
                 match val {
@@ -117,6 +163,13 @@ pub extern "C" fn row_data(row_ptr: RowPtr) -> RowDataArrayPtr {
                     None => Data::Null,
                 }
             }
+            "bool" => {
+                let val: Option<bool> = row.get(i);
+                match val {
+                    Some(v) => Data::Boolean(v),
+                    None => Data::Null
+                }
+            }
             "double precision" | "float8" => {
                 let val: Option<f64> = row.get(i);
                 Data::Float64(val.unwrap_or_else(|| f64::NAN))
@@ -125,7 +178,7 @@ pub extern "C" fn row_data(row_ptr: RowPtr) -> RowDataArrayPtr {
                 let val: Option<f32> = row.get(i);
                 Data::Float32(val.unwrap_or_else(|| f32::NAN))
             }
-            "varchar" | "char" | "text" | "citext" | "name" | "unknown" => {
+            _ => {
                 let string: Option<String> = row.get(i);
                 let ptr = match string {
                     Some(string) => {
@@ -137,10 +190,6 @@ pub extern "C" fn row_data(row_ptr: RowPtr) -> RowDataArrayPtr {
                     None => std::ptr::null(),
                 };
                 Data::String(ptr)
-            }
-            _ => {
-                eprintln!("Unsupported PostgreSQL type: {:?}", type_);
-                return std::ptr::null::<Data>() as RowDataArrayPtr;
             }
         };
         values.push(val)

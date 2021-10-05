@@ -1,5 +1,6 @@
 cimport numpy as np
 import numpy as np
+from cython cimport view
 from libc.stdlib cimport malloc
 from flaco cimport includes as lib
 
@@ -32,7 +33,7 @@ cpdef dict read_sql(str stmt, Connection con, int n_rows=-1):
     cdef list output = []
 
     # Begin looping until no rows are returned
-    cdef int row_idx = 0
+    cdef np.uint32_t row_idx = 0
     cdef int n_increment = 1_000
     cdef lib.RowDataArrayPtr row_data_ptr
     cdef lib.Data data
@@ -85,7 +86,13 @@ cdef resize(np.ndarray array, int len):
 
 cdef np.ndarray array_init(lib.Data data, int len):
     cdef np.ndarray array
-    if data.tag == lib.Data_Tag.Int32:
+    if data.tag == lib.Data_Tag.Int8:
+        array = np.empty(shape=len, dtype=object)
+    elif data.tag == lib.Data_Tag.Int16:
+        array = np.empty(shape=len, dtype=object)
+    elif data.tag == lib.Data_Tag.Uint32:
+        array = np.empty(shape=len, dtype=object)
+    elif data.tag == lib.Data_Tag.Int32:
         array = np.empty(shape=len, dtype=object)
     elif data.tag == lib.Data_Tag.Int64:
         array = np.empty(shape=len, dtype=object)
@@ -95,13 +102,32 @@ cdef np.ndarray array_init(lib.Data data, int len):
         array = np.empty(shape=len, dtype=np.float64)
     elif data.tag == lib.Data_Tag.String:
         array = np.empty(shape=len, dtype=object)
+    elif data.tag == lib.Data_Tag.Boolean:
+        array = np.empty(shape=len, dtype=bool)
+    elif data.tag == lib.Data_Tag.Bytes:
+        array = np.empty(shape=len, dtype=object)
     else:
         raise ValueError(f"Unsupported tag: {data.tag}")
     return array
 
 cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
 
-    if data.tag == lib.Data_Tag.Int64:
+    if data.tag == lib.Data_Tag.Boolean:
+        arr[idx] = data.boolean._0
+
+    elif data.tag == lib.Data_Tag.Bytes:
+        arr[idx] = <bytes>(<char[:data.bytes._0.len]> data.bytes._0.ptr)
+
+    elif data.tag == lib.Data_Tag.Int8:
+        arr[idx] = data.int8._0
+
+    elif data.tag == lib.Data_Tag.Int16:
+        arr[idx] = data.int16._0
+
+    elif data.tag == lib.Data_Tag.Uint32:
+        arr[idx] = data.uint32._0
+
+    elif data.tag == lib.Data_Tag.Int64:
         arr[idx] = data.int64._0
 
     elif data.tag == lib.Data_Tag.Int32:

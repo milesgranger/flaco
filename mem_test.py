@@ -5,7 +5,7 @@ from memory_profiler import profile
 
 @profile
 def run():
-    stmt = "select * from test_large_table"
+    stmt = "select * from foo"
     engine = create_engine("postgresql://postgres:postgres@localhost:5432/postgres")
     df1 = pd.read_sql(stmt, con=engine)
 
