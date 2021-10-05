@@ -42,7 +42,7 @@ cdef extern from "./libflaco.h":
 
     RowIteratorPtr read_sql(char *stmt_ptr, np.uint32_t *engine_ptr)
 
-    np.uint32_t* create_engine(char *uri_ptr)
+    np.uint32_t* create_connection(char *uri_ptr)
 
     void drop(np.uint32_t *ptr)
 

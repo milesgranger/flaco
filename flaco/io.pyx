@@ -6,11 +6,11 @@ from flaco cimport includes as lib
 np.import_array()
 
 
-cpdef tuple read_sql(str stmt, Engine engine):
+cpdef tuple read_sql(str stmt, Connection con):
     cdef bytes stmt_bytes = stmt.encode("utf-8")
 
     cdef lib.RowIteratorPtr row_iterator = lib.read_sql(
-        <char*>stmt_bytes, engine.client_ptr
+        <char*>stmt_bytes, con.connection_ptr
     )
 
     # Read first row
@@ -74,7 +74,7 @@ cpdef tuple read_sql(str stmt, Engine engine):
     lib.free_row_iter(row_iterator)
     lib.free_row_column_names(row_col_names)
 
-    return columns, output
+    return {columns[i]: output[i] for i in range(columns.shape[0])}
 
 cdef resize(np.ndarray array, int len):
     array.resize(len, refcheck=False)
@@ -122,19 +122,19 @@ cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         raise ValueError(f"Unsupported Data enum {data.tag}")
 
 
-cdef class Engine:
+cdef class Connection:
 
-    cdef np.uint32_t* client_ptr
+    cdef np.uint32_t* connection_ptr
     cdef bytes uri
 
     def __init__(self, str uri):
         self.uri = uri.encode("utf-8")
-        self._create_engine()
+        self._create_connection()
 
-    cdef _create_engine(self):
-        self.client_ptr = <np.uint32_t*>malloc(sizeof(np.uint32_t))
-        self.client_ptr = lib.create_engine(<char*>self.uri)
+    cdef _create_connection(self):
+        self.connection_ptr = <np.uint32_t*>malloc(sizeof(np.uint32_t))
+        self.connection_ptr = lib.create_connection(<char*>self.uri)
 
     def __dealloc__(self):
-        if &self.client_ptr != NULL:
-            lib.drop(self.client_ptr)
+        if &self.connection_ptr != NULL:
+            lib.drop(self.connection_ptr)
