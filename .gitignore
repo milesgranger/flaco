@@ -8,6 +8,7 @@ flaco/libflaco.h
 __pycache__/
 
 # Distribution / packaging
+wheelhouse/
 .Python
 env/
 build/
