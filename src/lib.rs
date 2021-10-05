@@ -28,7 +28,7 @@ impl Connection {
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct BytesPtr {
-    ptr: *const u32,
+    ptr: *const u8,
     len: u32
 }
 
@@ -120,7 +120,7 @@ pub extern "C" fn row_data(row_ptr: RowPtr) -> RowDataArrayPtr {
                 let val: Option<Vec<u8>> = row.get(i);
                 match val {
                     Some(v) => {
-                        let ptr = v.as_ptr() as *mut u32;
+                        let ptr = v.as_ptr();
                         let len = v.len() as u32;
                         mem::forget(v);
                         Data::Bytes(BytesPtr { ptr, len })

@@ -110,13 +110,24 @@ cdef np.ndarray array_init(lib.Data data, int len):
         raise ValueError(f"Unsupported tag: {data.tag}")
     return array
 
+cdef extern from "numpy/arrayobject.h":
+    void PyArray_ENABLEFLAGS(np.ndarray arr, int flags)
+
+ctypedef np.uint8_t DTYPE_t
+
 cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
+    cdef np.ndarray[np.uint8_t, ndim=1] arr_bytes
+    cdef np.npy_intp intp
 
     if data.tag == lib.Data_Tag.Boolean:
         arr[idx] = data.boolean._0
 
     elif data.tag == lib.Data_Tag.Bytes:
-        arr[idx] = <char[:data.bytes._0.len]> data.bytes._0.ptr
+        #arr[idx] = <np.ndarray[::-1]>(<np.uint8_t[:data.bytes._0.len]> data.bytes._0.ptr)
+        intp = <np.npy_intp>data.bytes._0.len
+        arr_bytes = np.PyArray_SimpleNewFromData(1, &intp, np.NPY_UINT8, data.bytes._0.ptr)
+        PyArray_ENABLEFLAGS(arr_bytes, np.NPY_OWNDATA)
+        arr[idx] = arr_bytes
 
     elif data.tag == lib.Data_Tag.Int8:
         arr[idx] = data.int8._0
