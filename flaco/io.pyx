@@ -6,7 +6,7 @@ from flaco cimport includes as lib
 np.import_array()
 
 
-cpdef tuple read_sql(str stmt, Connection con):
+cpdef dict read_sql(str stmt, Connection con, int n_rows=-1):
     cdef bytes stmt_bytes = stmt.encode("utf-8")
 
     cdef lib.RowIteratorPtr row_iterator = lib.read_sql(
@@ -33,6 +33,7 @@ cpdef tuple read_sql(str stmt, Connection con):
 
     # Begin looping until no rows are returned
     cdef int row_idx = 0
+    cdef int n_increment = 1_000
     cdef lib.RowDataArrayPtr row_data_ptr
     cdef lib.Data data
     while True:
@@ -40,21 +41,24 @@ cpdef tuple read_sql(str stmt, Connection con):
             break
         else:
 
-            # Insert new row
+            # Get and insert new row
             row_data_ptr = lib.row_data(row_ptr)
             if row_data_ptr == NULL:
                 raise TypeError(f"Unable to pull row data, likely an unsupported type. Check stderr output.")
 
             if row_idx == 0:
                 # Initialize arrays for output
+                # will resize at `n_increment` if `n_rows` is not set.
                 for i in range(0, n_columns):
                     data = lib.index_row(row_data_ptr, i)
-                    output.append(array_init(data, 1_000))
+                    output.append(
+                        array_init(data, n_increment if n_rows == -1 else n_rows)
+                    )
 
             # grow arrays if next insert is passed current len
-            if output[0].shape[0] <= row_idx:
+            if n_rows != -1 and output[0].shape[0] <= row_idx:
                 for i in range(0, n_columns):
-                    resize(output[i], output[i].shape[0] + 1_000)
+                    resize(output[i], output[i].shape[0] + n_increment)
 
             for i in range(0, n_columns):
                 data = lib.index_row(row_data_ptr, i)
@@ -66,8 +70,8 @@ cpdef tuple read_sql(str stmt, Connection con):
 
         row_ptr = lib.next_row(row_iterator)
 
-    # Ensure arrays are correct size
-    if output[0].shape[0] != row_idx:
+    # Ensure arrays are correct size; only if n_rows not set
+    if n_rows != -1 and output[0].shape[0] != row_idx:
         for i in range(0, n_columns):
             resize(output[i], row_idx)
 
