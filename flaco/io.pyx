@@ -72,7 +72,7 @@ cpdef dict read_sql(str stmt, Connection con, int n_rows=-1):
         row_ptr = lib.next_row(row_iterator)
 
     # Ensure arrays are correct size; only if n_rows not set
-    if n_rows != -1 and output[0].shape[0] != row_idx:
+    if n_rows == -1 and output[0].shape[0] != row_idx:
         for i in range(0, n_columns):
             resize(output[i], row_idx)
 
@@ -116,7 +116,7 @@ cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         arr[idx] = data.boolean._0
 
     elif data.tag == lib.Data_Tag.Bytes:
-        arr[idx] = <bytes>(<char[:data.bytes._0.len]> data.bytes._0.ptr)
+        arr[idx] = <char[:data.bytes._0.len]> data.bytes._0.ptr
 
     elif data.tag == lib.Data_Tag.Int8:
         arr[idx] = data.int8._0
