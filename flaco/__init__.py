@@ -1,1 +1,1 @@
-from .io import read_sql, Engine
+from .io import read_sql, Connection

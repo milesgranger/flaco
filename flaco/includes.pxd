@@ -1,9 +1,19 @@
 cimport numpy as np
+from libcpp cimport bool
 
 
 cdef extern from "./libflaco.h":
 
+    ctypedef struct BytesPtr:
+        const np.uint8_t *ptr
+        np.uint32_t len
+
     ctypedef enum Data_Tag:
+        Bytes
+        Boolean
+        Int8
+        Int16
+        Uint32
         Int32
         Int64
         Float32
@@ -11,11 +21,26 @@ cdef extern from "./libflaco.h":
         String
         Null
 
+    ctypedef struct Bytes_Body:
+        BytesPtr _0
+
+    ctypedef struct Boolean_Body:
+        bool _0
+
+    ctypedef struct Int8_Body:
+        np.int8_t _0
+
+    ctypedef struct Int16_Body:
+        np.int16_t _0
+
+    ctypedef struct Uint32_Body:
+        np.uint32_t _0
+
     ctypedef struct Int32_Body:
-        const np.int32_t _0
+        np.int32_t _0
 
     ctypedef struct Int64_Body:
-        const np.int64_t _0
+        np.int64_t _0
 
     ctypedef struct Float32_Body:
         np.float32_t _0
@@ -29,6 +54,11 @@ cdef extern from "./libflaco.h":
     ctypedef struct Data:
         Data_Tag tag
 
+        Bytes_Body bytes
+        Boolean_Body boolean
+        Int8_Body int8
+        Int16_Body int16
+        Uint32_Body uint32
         Int32_Body int32
         Int64_Body int64
         Float32_Body float32
@@ -42,7 +72,7 @@ cdef extern from "./libflaco.h":
 
     RowIteratorPtr read_sql(char *stmt_ptr, np.uint32_t *engine_ptr)
 
-    np.uint32_t* create_engine(char *uri_ptr)
+    np.uint32_t* create_connection(char *uri_ptr)
 
     void drop(np.uint32_t *ptr)
 

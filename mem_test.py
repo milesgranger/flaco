@@ -5,13 +5,13 @@ from memory_profiler import profile
 
 @profile
 def run():
-    stmt = "select * from test_large_table"
+    stmt = "select * from foo"
     engine = create_engine("postgresql://postgres:postgres@localhost:5432/postgres")
     df1 = pd.read_sql(stmt, con=engine)
 
     con = Engine("postgresql://postgres:postgres@localhost:5432/postgres")
-    columns, data = read_sql(stmt, con)
-    df2 = pd.DataFrame({name: data[i] for i, name in enumerate(columns)}, copy=False)
+    data = read_sql(stmt, con)
+    df2 = pd.DataFrame(data, copy=False)
 
 if __name__ == '__main__':
     run()

@@ -1,16 +1,17 @@
 cimport numpy as np
 import numpy as np
+from cython cimport view
 from libc.stdlib cimport malloc
 from flaco cimport includes as lib
 
 np.import_array()
 
 
-cpdef tuple read_sql(str stmt, Engine engine):
+cpdef dict read_sql(str stmt, Connection con, int n_rows=-1):
     cdef bytes stmt_bytes = stmt.encode("utf-8")
 
     cdef lib.RowIteratorPtr row_iterator = lib.read_sql(
-        <char*>stmt_bytes, engine.client_ptr
+        <char*>stmt_bytes, con.connection_ptr
     )
 
     # Read first row
@@ -32,7 +33,8 @@ cpdef tuple read_sql(str stmt, Engine engine):
     cdef list output = []
 
     # Begin looping until no rows are returned
-    cdef int row_idx = 0
+    cdef np.uint32_t row_idx = 0
+    cdef int n_increment = 1_000
     cdef lib.RowDataArrayPtr row_data_ptr
     cdef lib.Data data
     while True:
@@ -40,21 +42,24 @@ cpdef tuple read_sql(str stmt, Engine engine):
             break
         else:
 
-            # Insert new row
+            # Get and insert new row
             row_data_ptr = lib.row_data(row_ptr)
             if row_data_ptr == NULL:
                 raise TypeError(f"Unable to pull row data, likely an unsupported type. Check stderr output.")
 
             if row_idx == 0:
                 # Initialize arrays for output
+                # will resize at `n_increment` if `n_rows` is not set.
                 for i in range(0, n_columns):
                     data = lib.index_row(row_data_ptr, i)
-                    output.append(array_init(data, 1_000))
+                    output.append(
+                        array_init(data, n_increment if n_rows == -1 else n_rows)
+                    )
 
             # grow arrays if next insert is passed current len
-            if output[0].shape[0] <= row_idx:
+            if n_rows == -1 and output[0].shape[0] <= row_idx:
                 for i in range(0, n_columns):
-                    resize(output[i], output[i].shape[0] + 1_000)
+                    resize(output[i], output[i].shape[0] + n_increment)
 
             for i in range(0, n_columns):
                 data = lib.index_row(row_data_ptr, i)
@@ -66,22 +71,28 @@ cpdef tuple read_sql(str stmt, Engine engine):
 
         row_ptr = lib.next_row(row_iterator)
 
-    # Ensure arrays are correct size
-    if output[0].shape[0] != row_idx:
+    # Ensure arrays are correct size; only if n_rows not set
+    if n_rows == -1 and output[0].shape[0] != row_idx:
         for i in range(0, n_columns):
             resize(output[i], row_idx)
 
     lib.free_row_iter(row_iterator)
     lib.free_row_column_names(row_col_names)
 
-    return columns, output
+    return {columns[i]: output[i] for i in range(columns.shape[0])}
 
 cdef resize(np.ndarray array, int len):
     array.resize(len, refcheck=False)
 
 cdef np.ndarray array_init(lib.Data data, int len):
     cdef np.ndarray array
-    if data.tag == lib.Data_Tag.Int32:
+    if data.tag == lib.Data_Tag.Int8:
+        array = np.empty(shape=len, dtype=object)
+    elif data.tag == lib.Data_Tag.Int16:
+        array = np.empty(shape=len, dtype=object)
+    elif data.tag == lib.Data_Tag.Uint32:
+        array = np.empty(shape=len, dtype=object)
+    elif data.tag == lib.Data_Tag.Int32:
         array = np.empty(shape=len, dtype=object)
     elif data.tag == lib.Data_Tag.Int64:
         array = np.empty(shape=len, dtype=object)
@@ -91,13 +102,43 @@ cdef np.ndarray array_init(lib.Data data, int len):
         array = np.empty(shape=len, dtype=np.float64)
     elif data.tag == lib.Data_Tag.String:
         array = np.empty(shape=len, dtype=object)
+    elif data.tag == lib.Data_Tag.Boolean:
+        array = np.empty(shape=len, dtype=bool)
+    elif data.tag == lib.Data_Tag.Bytes:
+        array = np.empty(shape=len, dtype=object)
     else:
         raise ValueError(f"Unsupported tag: {data.tag}")
     return array
 
-cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
+cdef extern from "numpy/arrayobject.h":
+    void PyArray_ENABLEFLAGS(np.ndarray arr, int flags)
 
-    if data.tag == lib.Data_Tag.Int64:
+ctypedef np.uint8_t DTYPE_t
+
+cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
+    cdef np.ndarray[np.uint8_t, ndim=1] arr_bytes
+    cdef np.npy_intp intp
+
+    if data.tag == lib.Data_Tag.Boolean:
+        arr[idx] = data.boolean._0
+
+    elif data.tag == lib.Data_Tag.Bytes:
+        #arr[idx] = <np.ndarray[::-1]>(<np.uint8_t[:data.bytes._0.len]> data.bytes._0.ptr)
+        intp = <np.npy_intp>data.bytes._0.len
+        arr_bytes = np.PyArray_SimpleNewFromData(1, &intp, np.NPY_UINT8, data.bytes._0.ptr)
+        PyArray_ENABLEFLAGS(arr_bytes, np.NPY_OWNDATA)
+        arr[idx] = arr_bytes
+
+    elif data.tag == lib.Data_Tag.Int8:
+        arr[idx] = data.int8._0
+
+    elif data.tag == lib.Data_Tag.Int16:
+        arr[idx] = data.int16._0
+
+    elif data.tag == lib.Data_Tag.Uint32:
+        arr[idx] = data.uint32._0
+
+    elif data.tag == lib.Data_Tag.Int64:
         arr[idx] = data.int64._0
 
     elif data.tag == lib.Data_Tag.Int32:
@@ -110,10 +151,7 @@ cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         arr[idx] = data.float32._0
 
     elif data.tag == lib.Data_Tag.String:
-        if data.string._0 == NULL:
-            arr[idx] = None
-        else:
-            arr[idx] = data.string._0.decode()
+        arr[idx] = data.string._0.decode()
 
     elif data.tag == lib.Data_Tag.Null:
         arr[idx] = None
@@ -122,19 +160,19 @@ cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         raise ValueError(f"Unsupported Data enum {data.tag}")
 
 
-cdef class Engine:
+cdef class Connection:
 
-    cdef np.uint32_t* client_ptr
+    cdef np.uint32_t* connection_ptr
     cdef bytes uri
 
     def __init__(self, str uri):
         self.uri = uri.encode("utf-8")
-        self._create_engine()
+        self._create_connection()
 
-    cdef _create_engine(self):
-        self.client_ptr = <np.uint32_t*>malloc(sizeof(np.uint32_t))
-        self.client_ptr = lib.create_engine(<char*>self.uri)
+    cdef _create_connection(self):
+        self.connection_ptr = <np.uint32_t*>malloc(sizeof(np.uint32_t))
+        self.connection_ptr = lib.create_connection(<char*>self.uri)
 
     def __dealloc__(self):
-        if &self.client_ptr != NULL:
-            lib.drop(self.client_ptr)
+        if &self.connection_ptr != NULL:
+            lib.drop(self.connection_ptr)
