@@ -57,7 +57,7 @@ cpdef dict read_sql(str stmt, Connection con, int n_rows=-1):
                     )
 
             # grow arrays if next insert is passed current len
-            if n_rows != -1 and output[0].shape[0] <= row_idx:
+            if n_rows == -1 and output[0].shape[0] <= row_idx:
                 for i in range(0, n_columns):
                     resize(output[i], output[i].shape[0] + n_increment)
 

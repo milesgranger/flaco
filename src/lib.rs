@@ -1,9 +1,11 @@
 //#![warn(missing_docs)]
+use time;
 use postgres as pg;
 use postgres::fallible_iterator::FallibleIterator;
 use postgres::RowIter;
 use std::os::raw::c_char;
 use std::{ffi, mem};
+use std::net::IpAddr;
 
 type RowIteratorPtr = *mut u32;
 type RowPtr = *mut u32;
@@ -148,7 +150,6 @@ pub extern "C" fn row_data(row_ptr: RowPtr) -> RowDataArrayPtr {
         let type_ = row.columns()[i].type_();
         // TODO: postgres-types: expose Inner enum which these variations
         // and have postgres Row.type/(or something) expose the variant
-        println!("{}", type_.name());
         let val = match type_.name() {
             "bytea" => row.get::<_, Option<Vec<u8>>>(i).into(),
             "char" => row.get::<_, Option<i8>>(i).into(),
@@ -165,19 +166,61 @@ pub extern "C" fn row_data(row_ptr: RowPtr) -> RowDataArrayPtr {
                 let val: Option<f32> = row.get(i);
                 Data::Float32(val.unwrap_or_else(|| f32::NAN))
             }
-            _ => {
+            "varchar" | "char(n)" | "text" | "citext" | "name" | "unknown" => {
                 let string: Option<String> = row.get(i);
-                let ptr = match string {
-                    Some(string) => {
-                        let cstring = ffi::CString::new(string).unwrap();
-                        let ptr = cstring.as_ptr();
-                        mem::forget(cstring);
-                        ptr
-                    }
-                    None => std::ptr::null(),
-                };
-                Data::String(ptr)
+                Data::from(string)
+
             }
+            "timestamp" => {
+                let time_: Option<time::PrimitiveDateTime> = row.get(i);
+                match time_ {
+                    Some(t) => Data::from(Some(t.to_string())),
+                    None => Data::Null
+                }
+            }
+            "timestamp with time zone" | "timestamptz" => {
+                let time_: Option<time::OffsetDateTime> = row.get(i);
+                match time_ {
+                    Some(t) => Data::from(Some(t.to_string())),
+                    None => Data::Null
+                }
+            }
+            "date" => {
+                let time_: Option<time::Date> = row.get(i);
+                match time_ {
+                    Some(t) => Data::from(Some(t.to_string())),
+                    None => Data::Null
+                }
+            }
+            "time" => {
+                let time_: Option<time::Time> = row.get(i);
+                match time_ {
+                    Some(t) => Data::from(Some(t.to_string())),
+                    None => Data::Null
+                }
+            }
+            "json" | "jsonb" => {
+                let json: Option<serde_json::Value> = row.get(i);
+                match json {
+                    Some(j) => Data::from(Some(j.to_string())),
+                    None => Data::Null
+                }
+            }
+            "uuid" => {
+                let uuid_: Option<uuid::Uuid> = row.get(i);
+                match uuid_ {
+                    Some(u) => Data::from(Some(u.to_string())),
+                    None => Data::Null
+                }
+            }
+            "inet" => {
+                let ip: Option<IpAddr> = row.get(i);
+                match ip {
+                    Some(i) => Data::from(Some(i.to_string())),
+                    None => Data::Null
+                }
+            }
+            _ => unimplemented!("Unimplemented conversion for type: '{}'", type_.name())
         };
         values.push(val)
     }
