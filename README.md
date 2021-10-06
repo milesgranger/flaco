@@ -9,29 +9,23 @@ and [numpy](https://numpy.org/doc/stable/index.html). 🚀
 ### Example
 
 ```python
-from flaco import Connection
-
-# normal install, returns dict of col name -> array
-from flaco.numpy import read_sql as read_sql_numpy
-
-# pip install flaco[pandas] for pandas support
-# reads sql queries into dataframe
-from flaco.pandas import read_sql as read_sql_pandas
+from flaco.io import read_sql, Connection
 
 con = Connection("postgresql://postgres:postgres@localhost:5432/postgres")
 
 stmt = "select * from my_big_table"
+data = read_sql(stmt, con)  # dict of column name to numpy array
 
-numpy_arrays = read_sql_numpy(stmt, con)
-pandas_df = read_sql_pandas(stmt, con)
+# If you have pandas installed, you can create a DataFrame
+# with zero copying like this:
+import pandas as pd
+df = pd.DataFrame(data, copy=False)
 
-# If you know the _exact_ number of rows being
-# returned from the query, we can do a single 
-# allocation, and will result in pandas.array types
-# for flaco.pandas.read_sql (no need to do .convert_dtypes())
-# this is the most efficient possible way to load
-# as it requires no resizing of output arrays
-df = read_sql_pandas(stmt, con, n_rows=1_000_00)
+
+# If you know the _exact_ rows which will be returned
+# you can supply n_rows to perform a single array 
+# allocation without needing to resize during query reading.
+data = read_sql(stmt, con, 1_000)
 ```
 
 ---
@@ -39,9 +33,10 @@ df = read_sql_pandas(stmt, con, n_rows=1_000_00)
 # Notes
 
 While it's neat this lib can allow faster and less resource
-intensive use of pandas/numpy against PostgreSQL, it is currently focused on 
-performance, in terms of speed and memory efficiency. It's likely you'll
-experience some rough edges, to include, but not limited to:
+intensive use of numpy/pandas against PostgreSQL, it is currently 
+has a prioritization on  performance, in terms of speed and memory 
+efficiency. It's likely you'll experience some rough edges, to 
+include, but not limited to:
 
 - 📝 Poor/non-existant error messages
 - 💩 Core dumps
