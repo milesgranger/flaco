@@ -29,7 +29,7 @@ impl Connection {
 #[repr(C)]
 pub struct BytesPtr {
     ptr: *const u8,
-    len: u32
+    len: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -46,6 +46,53 @@ pub enum Data {
     Float64(f64),
     String(*const c_char),
     Null,
+}
+
+macro_rules! simple_from {
+    ($t:ty, $i:ident) => {
+        impl From<Option<$t>> for Data {
+            fn from(val: Option<$t>) -> Self {
+                match val {
+                    Some(v) => Data::$i(v),
+                    None => Data::Null,
+                }
+            }
+        }
+    };
+}
+
+simple_from!(bool, Boolean);
+simple_from!(i8, Int8);
+simple_from!(i16, Int16);
+simple_from!(i32, Int32);
+simple_from!(u32, Uint32);
+simple_from!(i64, Int64);
+
+impl From<Option<Vec<u8>>> for Data {
+    fn from(val: Option<Vec<u8>>) -> Self {
+        match val {
+            Some(v) => {
+                let ptr = v.as_ptr();
+                let len = v.len() as u32;
+                mem::forget(v);
+                Data::Bytes(BytesPtr { ptr, len })
+            }
+            None => Data::Null,
+        }
+    }
+}
+impl From<Option<String>> for Data {
+    fn from(val: Option<String>) -> Self {
+        match val {
+            Some(string) => {
+                let cstring = ffi::CString::new(string).unwrap();
+                let ptr = cstring.as_ptr();
+                mem::forget(cstring);
+                Data::String(ptr)
+            }
+            None => Data::Null,
+        }
+    }
 }
 
 #[no_mangle]
@@ -67,21 +114,8 @@ pub extern "C" fn read_sql(stmt_ptr: *const c_char, con_ptr: *mut u32) -> RowIte
     let stmt_c = unsafe { ffi::CStr::from_ptr(stmt_ptr) };
     let stmt = stmt_c.to_str().unwrap();
     let row_iter = con.client.query_raw::<_, &i32, _>(stmt, &[]).unwrap();
-    // read query to start rowstream
-
-    // get first row, and construct schema/columns in numpy
-
-    // iterate over each row in the stream
-
-    // for each column value in row
-
-    // First iteration, check if arrays should be resized to fit new row.
-
-    // if value is None, convert to appropriate pandas null type (pd.NA, pd.NaT)
-
-    // insert element into array
-    let row_iterator = Box::new(row_iter);
-    let ptr = Box::into_raw(row_iterator) as RowIteratorPtr;
+    let boxed_row_iter = Box::new(row_iter);
+    let ptr = Box::into_raw(boxed_row_iter) as RowIteratorPtr;
     mem::forget(con);
     ptr
 }
@@ -116,60 +150,13 @@ pub extern "C" fn row_data(row_ptr: RowPtr) -> RowDataArrayPtr {
         // and have postgres Row.type/(or something) expose the variant
         println!("{}", type_.name());
         let val = match type_.name() {
-            "bytea" => {
-                let val: Option<Vec<u8>> = row.get(i);
-                match val {
-                    Some(v) => {
-                        let ptr = v.as_ptr();
-                        let len = v.len() as u32;
-                        mem::forget(v);
-                        Data::Bytes(BytesPtr { ptr, len })
-                    },
-                    None => Data::Null
-                }
-            }
-            "char" => {
-                let val: Option<i8> = row.get(i);
-                match val {
-                    Some(v) => Data::Int8(v),
-                    None => Data::Null
-                }
-            }
-            "smallint" | "smallserial" | "int2" => {
-                let val: Option<i16> = row.get(i);
-                match val {
-                    Some(v) => Data::Int16(v),
-                    None => Data::Null
-                }
-            }
-            "oid" => {
-                let val: Option<u32> = row.get(i);
-                match val {
-                    Some(v) => Data::Uint32(v),
-                    None => Data::Null
-                }
-            }
-            "int4" | "int" | "serial" => {
-                let val: Option<i32> = row.get(i);
-                match val {
-                    Some(v) => Data::Int32(v),
-                    None => Data::Null,
-                }
-            }
-            "bigint" | "int8" | "bigserial" => {
-                let val: Option<i64> = row.get(i);
-                match val {
-                    Some(v) => Data::Int64(v),
-                    None => Data::Null,
-                }
-            }
-            "bool" => {
-                let val: Option<bool> = row.get(i);
-                match val {
-                    Some(v) => Data::Boolean(v),
-                    None => Data::Null
-                }
-            }
+            "bytea" => row.get::<_, Option<Vec<u8>>>(i).into(),
+            "char" => row.get::<_, Option<i8>>(i).into(),
+            "smallint" | "smallserial" | "int2" => row.get::<_, Option<i16>>(i).into(),
+            "oid" => row.get::<_, Option<u32>>(i).into(),
+            "int4" | "int" | "serial" => row.get::<_, Option<i32>>(i).into(),
+            "bigint" | "int8" | "bigserial" => row.get::<_, Option<i64>>(i).into(),
+            "bool" => row.get::<_, Option<bool>>(i).into(),
             "double precision" | "float8" => {
                 let val: Option<f64> = row.get(i);
                 Data::Float64(val.unwrap_or_else(|| f64::NAN))

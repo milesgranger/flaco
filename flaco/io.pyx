@@ -151,10 +151,7 @@ cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         arr[idx] = data.float32._0
 
     elif data.tag == lib.Data_Tag.String:
-        if data.string._0 == NULL:
-            arr[idx] = None
-        else:
-            arr[idx] = data.string._0.decode()
+        arr[idx] = data.string._0.decode()
 
     elif data.tag == lib.Data_Tag.Null:
         arr[idx] = None
