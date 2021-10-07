@@ -106,6 +106,8 @@ cdef np.ndarray array_init(lib.Data data, int len):
         array = np.empty(shape=len, dtype=bool)
     elif data.tag == lib.Data_Tag.Bytes:
         array = np.empty(shape=len, dtype=object)
+    elif data.tag == lib.Data_Tag.Null:
+        array = np.empty(shape=len, dtype=object)
     else:
         raise ValueError(f"Unsupported tag: {data.tag}")
     return array

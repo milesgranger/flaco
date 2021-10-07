@@ -1,6 +1,6 @@
 [package]
 name = "flaco"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2018"
 license = "Unlicense/MIT"
 
@@ -10,7 +10,7 @@ crate-type = ["staticlib"]
 
 [dependencies]
 uuid = "0.8.2"
-time = "0.3.3"
+time = { version = "0.3.3", features = ["formatting"] }
 serde_json = "1.0.68"
 postgres = { version = "0.19.1", features =["with-serde_json-1", "with-time-0_3", "with-uuid-0_8"] }
 postgres-protocol = "0.6.2"
