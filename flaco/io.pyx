@@ -17,6 +17,10 @@ cpdef dict read_sql(str stmt, Connection con, int n_rows=-1):
     # Read first row
     cdef lib.RowPtr row_ptr = lib.next_row(row_iterator)
 
+    if row_ptr == NULL:
+        lib.free_row_iter(row_iterator)
+        return dict()  # query returned no rows
+
     # get column names and row len
     cdef lib.RowColumnNamesArrayPtr row_col_names = lib.row_column_names(row_ptr)
     cdef np.uint32_t n_columns = lib.n_columns(row_ptr)

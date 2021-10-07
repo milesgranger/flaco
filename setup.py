@@ -18,7 +18,7 @@ extension = Extension(
 
 setup(
     name="flaco",
-    version="0.2.0",
+    version="0.1.0.post2",
     test_suite="tests",
     tests_require=[
         "pytest",
