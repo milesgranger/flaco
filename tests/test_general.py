@@ -2,7 +2,7 @@ import timeit
 import numpy as np
 import pandas as pd
 
-from flaco import read_sql, Engine
+from flaco.io import read_sql, Connection
 
 
 def test_simple_table(postgresdb, postgresdb_connection_uri):
@@ -12,7 +12,7 @@ def test_simple_table(postgresdb, postgresdb_connection_uri):
 
     df.to_sql("test_simple_table", index=False, con=postgresdb)
 
-    engine = Engine(postgresdb_connection_uri)
+    engine = Connection(postgresdb_connection_uri)
     columns, data = read_sql("select * from test_simple_table", engine)
     assert set(columns) == {"col1", "col2"}
     assert data[0].sum() == df.col1.sum()
@@ -29,8 +29,7 @@ def test_large_table(postgresdb, postgresdb_connection_uri):
     df["col3"] = np.random.random(size=size)
 
     df.to_sql("test_large_table", con=postgresdb, index=False)
-    breakpoint()
-    engine = Engine(postgresdb_connection_uri)
+    engine = Connection(postgresdb_connection_uri)
 
     scope = locals()
     scope["pd"] = pd
