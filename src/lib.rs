@@ -8,24 +8,80 @@ use std::{ffi, mem};
 use time;
 use time::format_description::well_known::Rfc3339;
 
+type DatabasePtr = *mut u32;
 type RowIteratorPtr = *mut u32;
 type RowPtr = *mut u32;
 type RowDataArrayPtr = *mut u32;
 type RowColumnNamesArrayPtr = *const *const c_char;
 
 /// Supports creating connections to a given connection URI
-pub struct Connection {
-    client: pg::Client,
+pub struct Database {
+    client: Option<pg::Client>,
+    uri: String,
 }
 
-impl Connection {
-    /// Create an `Connection` object
+impl Database {
+    /// Create an `Database` object
     /// `uri` is to conform to any of the normal connection strings, described
     /// in more [detail here](https://docs.rs/tokio-postgres/0.7.2/tokio_postgres/config/struct.Config.html#examples)
     pub fn new(uri: &str) -> Self {
-        let client = pg::Client::connect(uri, pg::NoTls).unwrap();
-        Self { client }
+        let client = None;
+        Self {
+            client,
+            uri: uri.to_string(),
+        }
     }
+
+    pub fn connect(&mut self) {
+        if self.client.is_none() {
+            self.client = Some(pg::Client::connect(&self.uri, pg::NoTls).unwrap());
+        }
+    }
+
+    pub fn disconnect(&mut self) {
+        if self.client.is_some() {
+            self.client = None;
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn db_create(uri_ptr: *const c_char) -> DatabasePtr {
+    let uri_c = unsafe { ffi::CStr::from_ptr(uri_ptr) };
+    let uri = uri_c.to_str().unwrap();
+    let db = Box::new(Database::new(uri));
+    Box::into_raw(db) as *mut _
+}
+
+#[no_mangle]
+pub extern "C" fn read_sql(stmt_ptr: *const c_char, db_ptr: DatabasePtr) -> RowIteratorPtr {
+    let mut db = unsafe { Box::from_raw(db_ptr as *mut Database) };
+    let stmt_c = unsafe { ffi::CStr::from_ptr(stmt_ptr) };
+    let stmt = stmt_c.to_str().unwrap();
+    let row_iter = db
+        .client
+        .as_mut()
+        .expect("Not connected!")
+        .query_raw::<_, &i32, _>(stmt, &[])
+        .unwrap();
+    let boxed_row_iter = Box::new(row_iter);
+    let ptr = Box::into_raw(boxed_row_iter) as RowIteratorPtr;
+    mem::forget(db);
+    ptr
+}
+
+#[no_mangle]
+pub extern "C" fn db_disconnect(ptr: DatabasePtr) {
+    let mut conn = unsafe { Box::from_raw(ptr as *mut Database) };
+    conn.disconnect();
+    mem::forget(conn);
+}
+
+#[no_mangle]
+pub extern "C" fn db_connect(ptr: DatabasePtr) {
+    let mut conn = unsafe { Box::from_raw(ptr as *mut Database) };
+    conn.connect();
+    mem::forget(conn);
 }
 
 #[derive(Clone, Debug)]
@@ -99,29 +155,10 @@ impl From<Option<String>> for Data {
 }
 
 #[no_mangle]
-pub extern "C" fn create_connection(uri_ptr: *const c_char) -> *mut u32 {
-    let uri_c = unsafe { ffi::CStr::from_ptr(uri_ptr) };
-    let uri = uri_c.to_str().unwrap();
-    let con = Box::new(Connection::new(uri));
-    Box::into_raw(con) as *mut _
-}
-
-#[no_mangle]
 pub extern "C" fn drop(ptr: *mut u32) {
     unsafe { Box::from_raw(ptr) };
 }
 
-#[no_mangle]
-pub extern "C" fn read_sql(stmt_ptr: *const c_char, con_ptr: *mut u32) -> RowIteratorPtr {
-    let mut con = unsafe { Box::from_raw(con_ptr as *mut Connection) };
-    let stmt_c = unsafe { ffi::CStr::from_ptr(stmt_ptr) };
-    let stmt = stmt_c.to_str().unwrap();
-    let row_iter = con.client.query_raw::<_, &i32, _>(stmt, &[]).unwrap();
-    let boxed_row_iter = Box::new(row_iter);
-    let ptr = Box::into_raw(boxed_row_iter) as RowIteratorPtr;
-    mem::forget(con);
-    ptr
-}
 #[no_mangle]
 pub extern "C" fn free_row_iter(ptr: RowIteratorPtr) {
     let _ = unsafe { Box::from_raw(ptr as *mut pg::RowIter) };
@@ -174,28 +211,36 @@ pub extern "C" fn row_data(row_ptr: RowPtr) -> RowDataArrayPtr {
             "timestamp" => {
                 let time_: Option<time::PrimitiveDateTime> = row.get(i);
                 match time_ {
-                    Some(t) => Data::from(Some(t.format(&Rfc3339).unwrap_or_else(|_| t.to_string()))),
+                    Some(t) => {
+                        Data::from(Some(t.format(&Rfc3339).unwrap_or_else(|_| t.to_string())))
+                    }
                     None => Data::Null,
                 }
             }
             "timestamp with time zone" | "timestamptz" => {
                 let time_: Option<time::OffsetDateTime> = row.get(i);
                 match time_ {
-                    Some(t) => Data::from(Some(t.format(&Rfc3339).unwrap_or_else(|_| t.to_string()))),
+                    Some(t) => {
+                        Data::from(Some(t.format(&Rfc3339).unwrap_or_else(|_| t.to_string())))
+                    }
                     None => Data::Null,
                 }
             }
             "date" => {
                 let time_: Option<time::Date> = row.get(i);
                 match time_ {
-                    Some(t) => Data::from(Some(t.format(&Rfc3339).unwrap_or_else(|_| t.to_string()))),
+                    Some(t) => {
+                        Data::from(Some(t.format(&Rfc3339).unwrap_or_else(|_| t.to_string())))
+                    }
                     None => Data::Null,
                 }
             }
             "time" => {
                 let time_: Option<time::Time> = row.get(i);
                 match time_ {
-                    Some(t) => Data::from(Some(t.format(&Rfc3339).unwrap_or_else(|_| t.to_string()))),
+                    Some(t) => {
+                        Data::from(Some(t.format(&Rfc3339).unwrap_or_else(|_| t.to_string())))
+                    }
                     None => Data::Null,
                 }
             }
@@ -281,7 +326,7 @@ mod tests {
     const CONNECTION_URI: &str = "postgresql://postgres:postgres@localhost:5432/postgres";
 
     fn basic_query() {
-        let con = Connection::new(CONNECTION_URI);
+        let con = Database::new(CONNECTION_URI);
         con.execute("create table if not exists foobar (col1 integer, col2 integer)");
         let n_rows = con.execute("insert into foobar (col1, col2) values (1, 1)");
         assert_eq!(n_rows, 1)

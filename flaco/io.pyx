@@ -1,17 +1,16 @@
 cimport numpy as np
 import numpy as np
-from cython cimport view
 from libc.stdlib cimport malloc
 from flaco cimport includes as lib
 
 np.import_array()
 
 
-cpdef dict read_sql(str stmt, Connection con, int n_rows=-1):
+cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     cdef bytes stmt_bytes = stmt.encode("utf-8")
 
     cdef lib.RowIteratorPtr row_iterator = lib.read_sql(
-        <char*>stmt_bytes, con.connection_ptr
+        <char*>stmt_bytes, db.db_ptr
     )
 
     # Read first row
@@ -166,19 +165,25 @@ cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         raise ValueError(f"Unsupported Data enum {data.tag}")
 
 
-cdef class Connection:
+cdef class Database:
 
-    cdef np.uint32_t* connection_ptr
+    cdef lib.DatabasePtr db_ptr
     cdef bytes uri
 
     def __init__(self, str uri):
         self.uri = uri.encode("utf-8")
-        self._create_connection()
+        self._create_db()
 
-    cdef _create_connection(self):
-        self.connection_ptr = <np.uint32_t*>malloc(sizeof(np.uint32_t))
-        self.connection_ptr = lib.create_connection(<char*>self.uri)
+    cdef _create_db(self):
+        self.db_ptr = <lib.DatabasePtr>malloc(sizeof(np.uint32_t))
+        self.db_ptr = lib.db_create(<char*>self.uri)
+
+    cpdef connect(self):
+        lib.db_connect(self.db_ptr)
+
+    cpdef disconnect(self):
+        lib.db_disconnect(self.db_ptr)
 
     def __dealloc__(self):
-        if &self.connection_ptr != NULL:
-            lib.drop(self.connection_ptr)
+        if &self.db_ptr != NULL:
+            lib.drop(self.db_ptr)

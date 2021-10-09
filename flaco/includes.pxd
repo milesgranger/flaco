@@ -65,24 +65,27 @@ cdef extern from "./libflaco.h":
         Float64_Body float64
         String_Body string
 
+    ctypedef np.uint32_t *DatabasePtr
     ctypedef np.uint32_t *RowIteratorPtr
     ctypedef np.uint32_t *RowPtr
     ctypedef char **RowColumnNamesArrayPtr
     ctypedef np.uint32_t *RowDataArrayPtr
 
-    RowIteratorPtr read_sql(char *stmt_ptr, np.uint32_t *engine_ptr)
+    RowIteratorPtr read_sql(char *stmt_ptr, DatabasePtr db_ptr)
 
-    np.uint32_t* create_connection(char *uri_ptr)
+    DatabasePtr db_create(char *uri_ptr)
+    void db_connect(DatabasePtr ptr)
+    void db_disconnect(DatabasePtr ptr)
 
-    void drop(np.uint32_t *ptr)
+    RowIteratorPtr read_sql(const char *stmt_ptr, DatabasePtr db_ptr)
+    void free_row_iter(RowIteratorPtr ptr);
+
+    void drop(DatabasePtr ptr)
 
     np.uint32_t n_columns(RowPtr row_ptr)
 
     RowPtr next_row(RowIteratorPtr row_iter_ptr)
     void free_row(RowPtr ptr);
-
-    RowIteratorPtr read_sql(const char *stmt_ptr, np.uint32_t *engine_ptr)
-    void free_row_iter(RowIteratorPtr ptr);
 
     RowColumnNamesArrayPtr row_column_names(RowPtr row_ptr)
     void free_row_column_names(RowColumnNamesArrayPtr ptr)
