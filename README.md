@@ -46,5 +46,6 @@ include, but not limited to:
      but uses `f64` for now; potentially loosing precision. Note, this
      is exactly what `pandas.read_sql` does. 
 - ❗ Might not handle all or custom arbitrary PostgreSQL types. If you encounter
-   such types, either convert them if they are custom, or open an issue if a 
-   standard type is not supported.
+   such types, either convert them to a supported type like text/json/jsonb 
+   (ie `select my_field::text ...`), or open an issue if a standard type is not 
+   supported.
