@@ -19,9 +19,9 @@ extension = Extension(
     sources=[str(pathlib.Path("flaco/*.pyx"))],
     libraries=["flaco"],
     include_dirs=[np.get_include(), "flaco"],
-    library_dirs=[str(pathlib.Path("target/release"))],
-    extra_compile_args=extra_compile_args,
-    extra_link_args=extra_link_args,
+    library_dirs=["D:\\a\\flaco\\flaco\\target\\release"],
+    #extra_compile_args=extra_compile_args,
+    #extra_link_args=extra_link_args,
     language="c"
 )
 
