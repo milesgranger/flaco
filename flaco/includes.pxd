@@ -1,8 +1,11 @@
+# distutils: language = c++
+# cython: language_level=3
+
 cimport numpy as np
 from libcpp cimport bool
 
 
-cdef extern from "./flaco.h":
+cdef extern from "./libflaco.h":
 
     ctypedef struct BytesPtr:
         const np.uint8_t *ptr
