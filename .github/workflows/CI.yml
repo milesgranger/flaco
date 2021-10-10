@@ -18,7 +18,7 @@ jobs:
         os: [
             #macos-latest,
             #windows-latest,
-          { os: "ubuntu-latest", arch: "universal2" }
+          { os: "ubuntu-latest", arch: "x86_64" }
         ]
     runs-on: ${{ matrix.os.os }}
     steps:
