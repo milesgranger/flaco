@@ -42,7 +42,7 @@ def test_basic_select_all_tables(postgresdb_connection_uri, table):
     assert len(df1.columns) == len(df2.columns)
 
 
-def test_large_table(postgresdb, postgresdb_connection_uri):
+def test_large_table(postgresdb_connection_uri):
 
     size = 1_000_000
 
@@ -51,7 +51,9 @@ def test_large_table(postgresdb, postgresdb_connection_uri):
     df["col2"] = df.col1.astype(str) + "-hello"
     df["col3"] = np.random.random(size=size)
 
-    df.to_sql("test_large_table", con=postgresdb, index=False)
+    df.to_sql(
+        "test_large_table", con=create_engine(postgresdb_connection_uri), index=False
+    )
     engine = Database(postgresdb_connection_uri)
 
     scope = locals()
