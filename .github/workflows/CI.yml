@@ -20,7 +20,7 @@ jobs:
             #windows-latest,
           { os: "ubuntu-latest", arch: "universal2" }
         ]
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os.os }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
