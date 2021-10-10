@@ -18,7 +18,8 @@ jobs:
         os: [
             #macos-latest,
             #windows-latest,
-          { os: "ubuntu-latest", arch: "x86_64" }
+          { os: "ubuntu-latest", arch: "x86_64" },
+          { os: "windows-latest", arch: "x64" }
         ]
     runs-on: ${{ matrix.os.os }}
     steps:
@@ -41,6 +42,7 @@ jobs:
           python -m cibuildwheel --archs ${{ matrix.os.arch }}
       - name: Install built wheels
         run: |
+          pip install numpy
           pip install flaco --no-index --find-links wheelhouse --force-reinstall
       - name: Upload wheels
         uses: actions/upload-artifact@v2
