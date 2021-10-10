@@ -8,7 +8,7 @@ from Cython.Distutils import build_ext
 if os.getenv("RUNNER_OS", "").lower() == "windows":
     p = pathlib.Path(__file__).absolute().parent.joinpath("target").joinpath("release").joinpath("flaco.lib")
     assert p.is_file(), "Rust lib not built!"
-    print(f"Files: {list(p.parent.iterdir())}")
+    assert pathlib.Path(__file__).parent.joinpath("flaco").joinpath("flaco.h").is_file()
     extra_link_args = [f"/LIBPATH:{p.parent}"]  # .lib on MSVC .a on MinGW
 else:
     extra_link_args = ["-l:libflaco.a"]
