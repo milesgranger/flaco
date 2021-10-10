@@ -42,5 +42,9 @@ include, but not limited to:
 - 💩 Core dumps
 - 🚰 Memory leaks (although I think most are handled now)
 - 🦖 Almost complete lack of exception handling from underlying Rust/C interface
-
-Please keep this in mind when creating new issues or requesting features.
+- 📍 PostgreSQL `numeric` type should ideally be converted to `decimal.Decimal`
+     but uses `f64` for now; potentially loosing precision. Note, this
+     is exactly what `pandas.read_sql` does. 
+- ❗ Might not handle all or custom arbitrary PostgreSQL types. If you encounter
+   such types, either convert them if they are custom, or open an issue if a 
+   standard type is not supported.

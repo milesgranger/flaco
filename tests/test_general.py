@@ -15,7 +15,7 @@ from flaco.io import read_sql, Database
         "city",
         "country",
         "customer",
-        #"film",
+        # "film",  # unsuppoted custom `mpaa_rating` TODO: support arbitrary types by serializing to string?
         "film_actor",
         "film_category",
         "inventory",
@@ -37,8 +37,7 @@ def test_basic_select_all_tables(postgresdb_connection_uri, table):
     data = read_sql(query, db)
     db.disconnect()
     df2 = pd.DataFrame(data, copy=False)
-    if table == "payment":
-        breakpoint()
+
     assert set(df1.columns) == set(df2.columns)
     assert len(df1.columns) == len(df2.columns)
 
