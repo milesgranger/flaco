@@ -37,6 +37,8 @@ jobs:
       - uses: Swatinem/rust-cache@v1
       - name: Build libflaco
         run: cargo build --release
+      - name: Build extension test
+        run: python setup.py build_ext
       - name: Build Wheels
         run: |
           python -m pip install cibuildwheel==2.2.0a1
