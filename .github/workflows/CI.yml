@@ -38,7 +38,7 @@ jobs:
       - name: Build libflaco
         run: |
           cargo build --release
-          dir
+          dir target\release
           cd
       - name: Build extension test
         run: |
