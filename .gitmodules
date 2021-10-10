@@ -1,0 +1,3 @@
+[submodule "pagila"]
+	path = pagila
+	url = git@github.com:xzilla/pagila.git

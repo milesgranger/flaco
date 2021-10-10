@@ -8,9 +8,17 @@ cdef extern from "./libflaco.h":
         const np.uint8_t *ptr
         np.uint32_t len
 
+    ctypedef struct DecimalUnpacked:
+        bool is_negative
+        int scale
+        int high
+        int mid
+        int low
+
     ctypedef enum Data_Tag:
         Bytes
         Boolean
+        Decimal
         Int8
         Int16
         Uint32
@@ -26,6 +34,9 @@ cdef extern from "./libflaco.h":
 
     ctypedef struct Boolean_Body:
         bool _0
+
+    ctypedef struct DecimalUnpacked_Body:
+        DecimalUnpacked _0
 
     ctypedef struct Int8_Body:
         np.int8_t _0
@@ -56,6 +67,7 @@ cdef extern from "./libflaco.h":
 
         Bytes_Body bytes
         Boolean_Body boolean
+        DecimalUnpacked_Body decimal
         Int8_Body int8
         Int16_Body int16
         Uint32_Body uint32
