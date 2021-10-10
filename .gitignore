@@ -1,5 +1,4 @@
 /target
-Cargo.lock
 flaco/*.so
 flaco/*.c
 flaco/libflaco.h
