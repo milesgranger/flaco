@@ -8,7 +8,7 @@ from Cython.Distutils import build_ext
 if os.getenv("RUNNER_OS", "").lower() == "windows":
     p = pathlib.Path(__file__).absolute().parent.joinpath("target").joinpath("release").joinpath("flaco.lib")
     assert p.is_file(), "Rust lib not built!"
-    extra_link_args = [f"/LIBPATH:{p.parent}", f"/DEFAULTLIB:{p}"]  # .lib on MSVC .a on MinGW
+    extra_link_args = [f"/LIBPATH:{p.parent}"]  # .lib on MSVC .a on MinGW
 else:
     extra_link_args = ["-l:libflaco.a"]
 
@@ -17,7 +17,7 @@ extension = Extension(
     sources=[str(pathlib.Path("flaco/*.pyx"))],
     libraries=["flaco"],
     include_dirs=[np.get_include(), "flaco"],
-    #library_dirs=[str(pathlib.Path("target/release")),],
+    library_dirs=[str(p.parent)],
     extra_compile_args=["-fopenmp", "-O3"],
     extra_link_args=extra_link_args,
     language="c"
