@@ -6,7 +6,7 @@ from Cython.Build import cythonize
 from Cython.Distutils import build_ext
 
 if os.getenv("RUNNER_OS", "").lower() == "windows":
-    extra_link_args = ["/LIBPATH:libflaco.a"]
+    extra_link_args = ["/LIBPATH:.\\target\\release\\libflaco"]
 else:
     extra_link_args = ["-l:libflaco.a"]
 

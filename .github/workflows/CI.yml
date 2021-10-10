@@ -18,7 +18,7 @@ jobs:
         os: [
             #macos-latest,
             #windows-latest,
-          { os: "ubuntu-latest", arch: "x86_64" },
+          #{ os: "ubuntu-latest", arch: "x86_64" },
           { os: "windows-latest", arch: "x86" }
         ]
     runs-on: ${{ matrix.os.os }}
@@ -35,7 +35,9 @@ jobs:
           default: true
       - uses: Swatinem/rust-cache@v1
       - name: Build libflaco
-        run: cargo build --release
+        run: |
+          cargo build --release
+          dir target\release
       - name: Build Wheels
         run: |
           python -m pip install cibuildwheel==2.2.0a1
