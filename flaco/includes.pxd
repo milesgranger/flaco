@@ -2,7 +2,7 @@ cimport numpy as np
 from libcpp cimport bool
 
 
-cdef extern from "./libflaco.h":
+cdef extern from "./flaco.h":
 
     ctypedef struct BytesPtr:
         const np.uint8_t *ptr
