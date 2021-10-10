@@ -1,8 +1,14 @@
+import os
 import pathlib
 import numpy as np
 from setuptools import setup, Extension
 from Cython.Build import cythonize
 from Cython.Distutils import build_ext
+
+if os.getenv("RUNNER_OS", "").lower() == "windows":
+    extra_link_args = ["/LIBPATH:libflaco.a"]
+else:
+    extra_link_args = ["-l:libflaco.a"]
 
 extension = Extension(
     name="*",
@@ -11,7 +17,7 @@ extension = Extension(
     include_dirs=[np.get_include(), "flaco"],
     library_dirs=[str(pathlib.Path("target/release")),],
     extra_compile_args=["-fopenmp", "-O3"],
-    extra_link_args=["-l:libflaco.a"],
+    extra_link_args=extra_link_args,
 )
 
 dev_requirements = [
