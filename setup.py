@@ -11,7 +11,7 @@ if os.getenv("RUNNER_OS", "").lower() == "windows":
     extra_link_args = [f"/link", f"/LIBPATH:D:\\a\\flaco\\flaco\\target\\release\\flaco.lib",
                        "/SUBSYSTEM:WINDOWS", "/LIBPATH:ws2_32.lib"]  # .lib on MSVC .a on MinGW
     extra_compile_args = [f"/link", f"/LIBPATH:D:\\a\\flaco\\flaco\\target\\release\\flaco.lib",
-                          "/SUBSYSTEM:WINDOWS"]
+                          "/SUBSYSTEM:WINDOWS", "/LIBPATH:ws2_32.lib"]
 else:
     extra_link_args = ["-l:libflaco.a"]
     extra_compile_args = ["-fopenmp", "-O3"]
