@@ -22,8 +22,8 @@ extension = Extension(
     libraries=["flaco"],
     include_dirs=[np.get_include(), str(pathlib.Path(__file__).absolute().parent.joinpath("flaco"))],
     library_dirs=["D:\\a\\flaco\\flaco\\target\\release"],
-    #extra_compile_args=extra_compile_args,
-    #extra_link_args=extra_link_args,
+    extra_compile_args=extra_compile_args,
+    extra_link_args=extra_link_args,
     language="c"
 )
 
