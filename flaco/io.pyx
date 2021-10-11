@@ -1,3 +1,7 @@
+#!python
+# distutils: language=c
+# cython: language_level=3
+
 cimport numpy as np
 import numpy as np
 from decimal import Decimal
