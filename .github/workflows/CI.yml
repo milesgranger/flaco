@@ -48,7 +48,7 @@ jobs:
       - name: Build Wheels
         run: |
           python -m pip install cibuildwheel==2.2.0a1
-          python -m cibuildwheel
+          python -m cibuildwheel --archs auto64
       - name: Install built wheels
         run: |
           pip install numpy
