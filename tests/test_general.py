@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from flaco.io import read_sql, Database
 
 
+@pytest.mark.skip(reason="docker not implemented on ci")
 @pytest.mark.parametrize(
     "table",
     (
@@ -42,6 +43,7 @@ def test_basic_select_all_tables(postgresdb_connection_uri, table):
     assert len(df1.columns) == len(df2.columns)
 
 
+@pytest.mark.skip(reason="docker not implemented on ci")
 def test_large_table(postgresdb_connection_uri):
 
     size = 1_000_000
