@@ -2,8 +2,9 @@
 use postgres as pg;
 use postgres::fallible_iterator::FallibleIterator;
 use postgres::RowIter;
+use rust_decimal::prelude::{Decimal, ToPrimitive};
 use std::net::IpAddr;
-use std::os::raw::c_char;
+use std::os::raw::{c_char};
 use std::{ffi, mem};
 use time;
 use time::format_description::well_known::Rfc3339;
@@ -96,6 +97,7 @@ pub struct BytesPtr {
 pub enum Data {
     Bytes(BytesPtr),
     Boolean(bool),
+    Decimal(f64),  // TODO: support lossless decimal/numeric type handling
     Int8(i8),
     Int16(i16),
     Int32(i32),
@@ -204,7 +206,7 @@ pub extern "C" fn row_data(row_ptr: RowPtr) -> RowDataArrayPtr {
                 let val: Option<f32> = row.get(i);
                 Data::Float32(val.unwrap_or_else(|| f32::NAN))
             }
-            "varchar" | "char(n)" | "text" | "citext" | "name" | "unknown" => {
+            "varchar" | "char(n)" | "text" | "citext" | "name" | "unknown" | "bpchar" => {
                 let string: Option<String> = row.get(i);
                 Data::from(string)
             }
@@ -262,6 +264,13 @@ pub extern "C" fn row_data(row_ptr: RowPtr) -> RowDataArrayPtr {
                 let ip: Option<IpAddr> = row.get(i);
                 match ip {
                     Some(i) => Data::from(Some(i.to_string())),
+                    None => Data::Null,
+                }
+            }
+            "numeric" => {
+                let decimal: Option<Decimal> = row.get(i);
+                match decimal {
+                    Some(d) => Data::Decimal(d.to_f64().unwrap_or_else(|| f64::NAN)),
                     None => Data::Null,
                 }
             }

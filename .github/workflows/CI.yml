@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  pull_request:
+  release:
+    types:
+      - released
+      - prereleased
+
+jobs:
+
+
+  build:
+
+    strategy:
+      matrix:
+        python: [3.7]
+        os: [
+            #macos-latest,
+          { os: "ubuntu-latest", os_arch: "x64", cibw_arch: "x86_64" },
+          { os: "windows-latest", os_arch: "x64", cibw_arch: "AMD64" }
+        ]
+    runs-on: ${{ matrix.os.os }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python }}
+          architecture: ${{ matrix.os.os_arch }}
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          default: true
+      - uses: Swatinem/rust-cache@v1
+        with:
+          cache-on-failure: true
+      - name: Build libflaco
+        run: cargo build --release
+      - name: Build extension test
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy wheel Cython
+          python setup.py build_ext
+      - name: Install
+        run: python -m pip install .[dev]
+      - name: Test
+        run: python setup.py test
+      - name: Build Wheels
+        if: "startsWith(github.ref, 'refs/tags/')"
+        run: |
+          python -m pip install cibuildwheel==2.2.0a1
+          python -m cibuildwheel --archs ${{ matrix.os.cibw_arch }}
+      - name: Upload wheels
+        if: "startsWith(github.ref, 'refs/tags/')"
+        uses: actions/upload-artifact@v2
+        with:
+          name: wheels
+          path: wheelhouse
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    if: "startsWith(github.ref, 'refs/tags/')"
+    needs: [ build ]
+    steps:
+      - uses: actions/download-artifact@v2
+        with:
+          name: wheels
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+      - name: Publish to PyPi
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: |
+          pip install --upgrade wheel pip setuptools twine
+          twine upload --skip-existing *

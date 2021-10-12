@@ -2,4 +2,4 @@ autogen_warning = "/* Binding from Rust to Cython  */"
 language = "C"
 
 [export]
-include = ["Data", "Row", "BytesPtr"]
+include = ["Data", "Row", "BytesPtr", "Decimal"]

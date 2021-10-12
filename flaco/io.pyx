@@ -1,5 +1,10 @@
+#!python
+# distutils: language=c
+# cython: language_level=3
+
 cimport numpy as np
 import numpy as np
+from decimal import Decimal
 from libc.stdlib cimport malloc
 from flaco cimport includes as lib
 
@@ -109,6 +114,8 @@ cdef np.ndarray array_init(lib.Data data, int len):
         array = np.empty(shape=len, dtype=bool)
     elif data.tag == lib.Data_Tag.Bytes:
         array = np.empty(shape=len, dtype=object)
+    elif data.tag == lib.Data_Tag.Decimal:
+        array = np.empty(shape=len, dtype=np.float64)
     elif data.tag == lib.Data_Tag.Null:
         array = np.empty(shape=len, dtype=object)
     else:
@@ -155,6 +162,9 @@ cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
 
     elif data.tag == lib.Data_Tag.String:
         arr[idx] = data.string._0.decode()
+
+    elif data.tag == lib.Data_Tag.Decimal:
+        arr[idx] = data.decimal._0
 
     elif data.tag == lib.Data_Tag.Null:
         arr[idx] = None

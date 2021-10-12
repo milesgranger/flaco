@@ -1,8 +1,12 @@
+#!python
+# distutils: language=c
+# cython: language_level=3
+
 cimport numpy as np
 from libcpp cimport bool
 
 
-cdef extern from "./libflaco.h":
+cdef extern from "./flaco.h":
 
     ctypedef struct BytesPtr:
         const np.uint8_t *ptr
@@ -11,6 +15,7 @@ cdef extern from "./libflaco.h":
     ctypedef enum Data_Tag:
         Bytes
         Boolean
+        Decimal
         Int8
         Int16
         Uint32
@@ -26,6 +31,9 @@ cdef extern from "./libflaco.h":
 
     ctypedef struct Boolean_Body:
         bool _0
+
+    ctypedef struct Decimal_Body:
+        np.float64_t _0
 
     ctypedef struct Int8_Body:
         np.int8_t _0
@@ -56,6 +64,7 @@ cdef extern from "./libflaco.h":
 
         Bytes_Body bytes
         Boolean_Body boolean
+        Decimal_Body decimal
         Int8_Body int8
         Int16_Body int16
         Uint32_Body uint32

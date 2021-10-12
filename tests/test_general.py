@@ -1,42 +1,50 @@
 import timeit
-import datetime as dt
+import pytest
 import numpy as np
 import pandas as pd
-from hypothesis import strategies as st, given, settings
-from hypothesis.extra.pandas import data_frames, column
-
+from sqlalchemy import create_engine
 from flaco.io import read_sql, Database
 
 
-@given(
-    df_in=data_frames(
-        columns=[
-            column("col1", elements=st.text(max_size=300)),
-            column("col2", elements=st.binary(max_size=300)),
-            column("col3", elements=st.integers()),
-            column("col4", elements=st.floats()),
-        ]
-    )
+@pytest.mark.skip(reason="docker not implemented on ci")
+@pytest.mark.parametrize(
+    "table",
+    (
+        "actor",
+        "address",
+        "category",
+        "city",
+        "country",
+        "customer",
+        # "film",  # unsuppoted custom `mpaa_rating` TODO: support arbitrary types by serializing to string?
+        "film_actor",
+        "film_category",
+        "inventory",
+        "language",
+        "payment",
+        "rental",
+        "staff",
+        "store",
+    ),
 )
-@settings(max_examples=10, deadline=dt.timedelta(seconds=5))
-def test_property_values(df_in, postgresdb, postgresdb_connection_uri):
-    if df_in.empty:
-        return
-    df_in = df_in.loc[:5_000, :]  # avoid huge loads into db
-    df_in.to_sql("foo", index=False, con=postgresdb, if_exists="replace")
+def test_basic_select_all_tables(postgresdb_connection_uri, table):
+
+    query = f"select * from {table}"
+
+    df1 = pd.read_sql_table(table, con=create_engine(postgresdb_connection_uri))
 
     db = Database(postgresdb_connection_uri)
     db.connect()
-    data = read_sql("select * from foo", db)
+    data = read_sql(query, db)
     db.disconnect()
-    df_out = pd.DataFrame(data, copy=False)
-    if not df_in.empty:
-        assert df_in["col3"].sum() == df_out["col3"].sum()
-    else:
-        assert df_out.columns.size == 0
+    df2 = pd.DataFrame(data, copy=False)
+
+    assert set(df1.columns) == set(df2.columns)
+    assert len(df1.columns) == len(df2.columns)
 
 
-def test_large_table(postgresdb, postgresdb_connection_uri):
+@pytest.mark.skip(reason="docker not implemented on ci")
+def test_large_table(postgresdb_connection_uri):
 
     size = 1_000_000
 
@@ -45,7 +53,9 @@ def test_large_table(postgresdb, postgresdb_connection_uri):
     df["col2"] = df.col1.astype(str) + "-hello"
     df["col3"] = np.random.random(size=size)
 
-    df.to_sql("test_large_table", con=postgresdb, index=False)
+    df.to_sql(
+        "test_large_table", con=create_engine(postgresdb_connection_uri), index=False
+    )
     engine = Database(postgresdb_connection_uri)
 
     scope = locals()
