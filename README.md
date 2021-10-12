@@ -1,5 +1,10 @@
 ## flaco
 
+[![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/python/black)
+[![CI](https://github.com/milesgranger/flaco/workflows/CI/badge.svg?branch=master)](https://github.com/milesgranger/flaco/actions?query=branch=master)
+[![PyPI](https://img.shields.io/pypi/v/flaco.svg)](https://pypi.org/project/flaco)
+[![Downloads](https://pepy.tech/badge/flaco/month)](https://pepy.tech/project/flaco)
+
 Perhaps the fastest and most memory efficient way to
 pull data from PostgreSQL into [pandas](https://pandas.pydata.org/) 
 and [numpy](https://numpy.org/doc/stable/index.html). 🚀

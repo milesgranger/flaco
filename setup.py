@@ -50,7 +50,7 @@ dev_requirements = [
 
 setup(
     name="flaco",
-    version="0.1.0.post2",
+    version="0.1.0.post3",
     test_suite="tests",
     tests_require=dev_requirements,
     extras_require={"dev": dev_requirements},
