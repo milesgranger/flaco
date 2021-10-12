@@ -2,10 +2,9 @@
 requires = ["Cython", "setuptools", "wheel", "numpy"]
 
 
-
 # https://cibuildwheel.readthedocs.io/en/stable/options/#configuration-file
 [tool.cibuildwheel]
-test-command = "python -c 'from flaco.io import read_sql, Connection'"
+test-command = "python -c 'from flaco.io import read_sql, Database'"
 
 [tool.cibuildwheel.linux]
 before-all = "rm -rf build target/release/deps/"
