@@ -49,7 +49,7 @@ jobs:
           python -m cibuildwheel --archs ${{ matrix.os.cibw_arch }}
       - name: Install built wheels
         run: |
-          pip install --find-links wheelhouse flaco --force-reinstall
+          pip install --find-links wheelhouse flaco --force-reinstall --no-index
       - name: Upload wheels
         uses: actions/upload-artifact@v2
         with:
