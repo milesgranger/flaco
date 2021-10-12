@@ -17,8 +17,8 @@ jobs:
         python: [3.7]
         os: [
             #macos-latest,
-          { os: "ubuntu-latest", os_arch: "x64", cibw_arch: "x86_64" },
-          { os: "windows-latest", os_arch: "x64", cibw_arch: "AMD64" }
+          { os: "ubuntu-latest", os_arch: "x64", cibw_arch: "x86_64", target: "x86_64-unknown-linux-musl" },
+          { os: "windows-latest", os_arch: "x64", cibw_arch: "AMD64", target: "x86_64-pc-windows-msvc" }
         ]
     runs-on: ${{ matrix.os.os }}
     steps:
