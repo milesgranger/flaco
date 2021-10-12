@@ -1,7 +1,7 @@
 /target
 flaco/*.so
 flaco/*.c
-flaco/libflaco.h
+flaco/flaco.h
 
 .idea/
 __pycache__/

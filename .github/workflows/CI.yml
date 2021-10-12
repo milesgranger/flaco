@@ -17,9 +17,8 @@ jobs:
         python: [3.7]
         os: [
             #macos-latest,
-            #windows-latest,
-          #{ os: "ubuntu-latest", arch: "x86_64" },
-          { os: "windows-latest", arch: "x64" }
+          { os: "ubuntu-latest", os_arch: "x86_64", cibw_arch: "x86_64" },
+          { os: "windows-latest", os_arch: "x64", cibw_arch: "AMD64" }
         ]
     runs-on: ${{ matrix.os.os }}
     steps:
@@ -27,14 +26,13 @@ jobs:
       - uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python }}
-          architecture: ${{ matrix.os.arch }}
+          architecture: ${{ matrix.os.os_arch }}
       - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: amd64
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
-          target: x86_64-pc-windows-msvc
           toolchain: stable
           profile: minimal
           default: true
@@ -54,10 +52,9 @@ jobs:
       - name: Build Wheels
         run: |
           python -m pip install cibuildwheel==2.2.0a1
-          python -m cibuildwheel --archs AMD64
+          python -m cibuildwheel --archs ${{ matrix.os.cibw_arch }}
       - name: Install built wheels
         run: |
-          pip install numpy
           pip install flaco --no-index --find-links wheelhouse --force-reinstall
       - name: Upload wheels
         uses: actions/upload-artifact@v2

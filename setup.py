@@ -54,7 +54,7 @@ setup(
     tests_require=dev_requirements,
     extras_require={"dev": dev_requirements},
     cmdclass={"build_ext": build_ext},
-    install_requires=["numpy>1.0.0"],
+    install_requires=["numpy>=1.0.0"],
     ext_modules=cythonize(extension),
     include_dirs=[np.get_include(), "flaco"],
     zip_safe=False,
