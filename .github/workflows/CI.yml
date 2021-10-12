@@ -27,9 +27,6 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           architecture: ${{ matrix.os.os_arch }}
-      - uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: amd64
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
