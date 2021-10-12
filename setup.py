@@ -5,26 +5,37 @@ from setuptools import setup, Extension
 from Cython.Build import cythonize
 from Cython.Distutils import build_ext
 
+
+flaco_lib_dir = pathlib.Path(__file__).parent.joinpath("target").joinpath("release")
+
+libraries = ["flaco"]
 if os.getenv("RUNNER_OS", "").lower() == "windows":
-    p = pathlib.Path(__file__).parent.joinpath("target").joinpath("release").joinpath("flaco.lib")
-    assert p.is_file(), "Rust lib not built!"
-    extra_link_args = [f"/link", f"/LIBPATH:D:\\a\\flaco\\flaco\\target\\release\\flaco.lib",
-                       "/SUBSYSTEM:WINDOWS", "/LIBPATH:ws2_32.lib"]  # .lib on MSVC .a on MinGW
-    extra_compile_args = [f"/link", f"/LIBPATH:D:\\a\\flaco\\flaco\\target\\release\\flaco.lib",
-                          "/SUBSYSTEM:WINDOWS", "/LIBPATH:ws2_32.lib"]
+    libraries.extend(["ntdll", "ws2_32", "bcrypt", "advapi32"])
+    flaco_lib_file = flaco_lib_dir.joinpath("flaco.lib")
+    extra_link_args = []
+    extra_compile_args = [
+        "/link",
+        "/SUBSYSTEM:WINDOWS",
+    ]
 else:
+    flaco_lib_file = flaco_lib_dir.joinpath("libflaco.a")
     extra_link_args = ["-l:libflaco.a"]
     extra_compile_args = ["-fopenmp", "-O3"]
+
+assert (
+    flaco_lib_file.is_file()
+), "flaco lib not build; run 'cargo build --release' first."
+
 
 extension = Extension(
     name="*",
     sources=[str(pathlib.Path("flaco/*.pyx"))],
-    libraries=["flaco", "ntdll", "ws2_32", "bcrypt", "advapi32"],
-    include_dirs=[np.get_include(), str(pathlib.Path(__file__).absolute().parent.joinpath("flaco"))],
-    library_dirs=["D:\\a\\flaco\\flaco\\target\\release"],
+    libraries=libraries,
+    include_dirs=[np.get_include()],
+    library_dirs=[str(pathlib.Path("target/release"))],
     extra_compile_args=extra_compile_args,
     extra_link_args=extra_link_args,
-    language="c"
+    language="c",
 )
 
 dev_requirements = [
@@ -43,7 +54,7 @@ setup(
     tests_require=dev_requirements,
     extras_require={"dev": dev_requirements},
     cmdclass={"build_ext": build_ext},
-    install_requires=["numpy"],
+    install_requires=["numpy>1.0.0"],
     ext_modules=cythonize(extension),
     include_dirs=[np.get_include(), "flaco"],
     zip_safe=False,

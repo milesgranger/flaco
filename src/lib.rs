@@ -129,7 +129,6 @@ simple_from!(i32, Int32);
 simple_from!(u32, Uint32);
 simple_from!(i64, Int64);
 
-
 impl From<Option<Vec<u8>>> for Data {
     fn from(val: Option<Vec<u8>>) -> Self {
         match val {
