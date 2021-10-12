@@ -1,2 +1,6 @@
+[build]
+rustflags = ["--print=native-static-libs"]
+
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
+
