@@ -40,10 +40,7 @@ jobs:
         with:
           cache-on-failure: true
       - name: Build libflaco
-        run: |
-          cargo build --release
-          dir target\release
-          cd
+        run: cargo build --release
       - name: Build extension test
         run: |
           python -m pip install --upgrade pip
