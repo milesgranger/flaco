@@ -9,9 +9,9 @@ and [numpy](https://numpy.org/doc/stable/index.html). 🚀
 ### Example
 
 ```python
-from flaco.io import read_sql, Connection
+from flaco import read_sql, Database
 
-con = Connection("postgresql://postgres:postgres@localhost:5432/postgres")
+con = Database("postgresql://postgres:postgres@localhost:5432/postgres")
 
 stmt = "select * from my_big_table"
 data = read_sql(stmt, con)  # dict of column name to numpy array
