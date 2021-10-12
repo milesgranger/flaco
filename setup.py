@@ -24,7 +24,7 @@ else:
 
 assert (
     flaco_lib_file.is_file()
-), "flaco lib not build; run 'cargo build --release' first."
+), "flaco lib not built; run 'cargo build --release' first."
 
 
 extension = Extension(
