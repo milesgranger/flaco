@@ -9,7 +9,7 @@ and [numpy](https://numpy.org/doc/stable/index.html). 🚀
 ### Example
 
 ```python
-from flaco import read_sql, Database
+from flaco.io import read_sql, Database
 
 con = Database("postgresql://postgres:postgres@localhost:5432/postgres")
 
