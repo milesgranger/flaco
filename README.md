@@ -1,13 +1,18 @@
 ## flaco
 
 [![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/python/black)
-[![CI](https://github.com/milesgranger/flaco/workflows/CI/badge.svg?branch=master)](https://github.com/milesgranger/flaco/actions?query=branch=master)
+[![CI](https://github.com/milesgranger/flaco/actions/workflows/CI.yml/badge.svg?branch=master)](https://github.com/milesgranger/flaco/actions/workflows/CI.yml)
 [![PyPI](https://img.shields.io/pypi/v/flaco.svg)](https://pypi.org/project/flaco)
+![PyPI - Wheel](https://img.shields.io/pypi/wheel/flaco)
 [![Downloads](https://pepy.tech/badge/flaco/month)](https://pepy.tech/project/flaco)
 
 Perhaps the fastest and most memory efficient way to
 pull data from PostgreSQL into [pandas](https://pandas.pydata.org/) 
 and [numpy](https://numpy.org/doc/stable/index.html). 🚀
+
+Initial testing seems to indicate ~4x less memory use
+over standard use of `pandas.read_sql` and about ~2x faster.
+However, it's probably 100x less stable at the moment. 😜
 
 ---
 
@@ -37,11 +42,10 @@ data = read_sql(stmt, con, 1_000)
 
 # Notes
 
-While it's neat this lib can allow faster and less resource
-intensive use of numpy/pandas against PostgreSQL, it is currently 
-has a prioritization on  performance, in terms of speed and memory 
-efficiency. It's likely you'll experience some rough edges, to 
-include, but not limited to:
+While it's pretty neat this lib can allow faster and less resource
+intensive use of numpy/pandas against PostgreSQL, it's in early 
+stages of development and you're likely to encounter some sharp edges
+which include, but not limited to:
 
 - 📝 Poor/non-existant error messages
 - 💩 Core dumps
