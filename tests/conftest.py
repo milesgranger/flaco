@@ -1,6 +1,7 @@
 import pytest
-import docker
-import sqlalchemy
+import numpy as np
+import pandas as pd
+from sqlalchemy import create_engine
 
 
 @pytest.fixture(scope="session")
@@ -8,33 +9,18 @@ def postgresdb_connection_uri():
     return "postgresql://postgres:postgres@localhost:5432/postgres"
 
 
-@pytest.yield_fixture(scope="session")
-def postgresdb(postgresdb_connection_uri):
-    """
-    Run a postgres container for integration type tests which need
-    access to a database.
-    """
-    client = docker.from_env()
-    postgres = client.containers.run(
-        image="docker.io/postgres:12-alpine",
-        environment={"POSTGRES_USER": "postgres", "POSTGRES_PASSWORD": "postgres"},
-        ports={"5432/tcp": "5432"},
-        remove=True,
-        detach=True,
-    )
-    engine = sqlalchemy.create_engine(postgresdb_connection_uri)
+@pytest.fixture
+def postgresdb_engine(postgresdb_connection_uri):
+    return create_engine(postgresdb_connection_uri)
 
-    # Wait for ability to connect...
-    while True:
-        try:
-            conn = engine.connect()
-            conn.close()
-        except:
-            continue
-        else:
-            break
 
-    try:
-        yield engine
-    finally:
-        postgres.kill()
+@pytest.fixture
+def simple_table(postgresdb_engine):
+    size = 10_000
+    df = pd.DataFrame()
+    df["col1"] = np.random.randint(0, 100, size=size)
+    df["col2"] = df.col1.astype(str) + "-hello"
+    df["col3"] = np.random.random(size=size)
+    con = postgresdb_engine.connect()
+    df.to_sql("simple_table", con=con, index=False, if_exists="replace")
+    return "simple_table"

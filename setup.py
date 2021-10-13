@@ -41,9 +41,8 @@ extension = Extension(
 dev_requirements = [
     "pytest-runner",
     "pytest",
-    "docker",
     "sqlalchemy",
-    "psycopg2",
+    "psycopg2-binary<2.9.0",
     "hypothesis",
     "pandas",
 ]
