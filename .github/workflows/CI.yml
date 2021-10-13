@@ -31,6 +31,11 @@ jobs:
         with:
           submodules: true
       - uses: actions/setup-python@v2
+      - uses: actions/cache@v2
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/setup.py') }}
+          restore-keys: ${{ runner.os }}-pip-
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -52,9 +57,9 @@ jobs:
       matrix:
         python: [3.7]
         os: [
-            #macos-latest,
-          { os: "ubuntu-latest", os_arch: "x64", cibw_arch: "x86_64" },
-          { os: "windows-latest", os_arch: "x64", cibw_arch: "AMD64" }
+          # { os: macos-latest, os_arch: "x64", cibw_arch: "universal2", pip_cache: "~/Library/Caches/pip" },
+          { os: "ubuntu-latest", os_arch: "x64", cibw_arch: "x86_64", pip_cache: "~/.cache/pip" },
+          { os: "windows-latest", os_arch: "x64", cibw_arch: "AMD64", pip_cache: "~\AppData\Local\pip\Cache" }
         ]
 
     runs-on: ${{ matrix.os.os }}
@@ -65,6 +70,11 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           architecture: ${{ matrix.os.os_arch }}
+      - uses: actions/cache@v2
+        with:
+          path: ${{ matrix.os.pip_cache }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/setup.py') }}
+          restore-keys: ${{ runner.os }}-pip-
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
