@@ -3,11 +3,13 @@
 
 cimport numpy as np
 import numpy as np
-from decimal import Decimal
 from libc.stdlib cimport malloc
 from flaco cimport includes as lib
 
 np.import_array()
+
+cdef extern from "numpy/arrayobject.h":
+    void PyArray_ENABLEFLAGS(np.ndarray arr, int flags)
 
 
 cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
@@ -31,7 +33,7 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     # build columns
     cdef np.ndarray columns = np.zeros(shape=n_columns, dtype=object)
 
-    cdef int i
+    cdef np.uint32_t i
     for i in range(0, n_columns):
         columns[i] = row_col_names[i].decode()
 
@@ -41,7 +43,8 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
 
     # Begin looping until no rows are returned
     cdef np.uint32_t row_idx = 0
-    cdef int n_increment = 1_000
+    cdef np.uint32_t one = 1
+    cdef np.uint32_t n_increment = 1_000
     cdef lib.RowDataArrayPtr row_data_ptr
     cdef lib.Data data
     while True:
@@ -74,7 +77,7 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
 
             lib.free_row_data_array(row_data_ptr)
             lib.free_row(row_ptr)
-            row_idx += 1
+            row_idx += one
 
         row_ptr = lib.next_row(row_iterator)
 
@@ -120,9 +123,6 @@ cdef np.ndarray array_init(lib.Data data, int len):
     else:
         raise ValueError(f"Unsupported tag: {data.tag}")
     return array
-
-cdef extern from "numpy/arrayobject.h":
-    void PyArray_ENABLEFLAGS(np.ndarray arr, int flags)
 
 
 cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
@@ -170,6 +170,7 @@ cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
 
     else:
         raise ValueError(f"Unsupported Data enum {data.tag}")
+
 
 
 cdef class Database:

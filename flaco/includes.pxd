@@ -8,7 +8,7 @@ from libcpp cimport bool
 cdef extern from "./flaco.h":
 
     ctypedef struct BytesPtr:
-        const np.uint8_t *ptr
+        np.uint8_t *ptr
         np.uint32_t len
 
     ctypedef enum Data_Tag:
