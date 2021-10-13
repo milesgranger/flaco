@@ -57,9 +57,9 @@ jobs:
       matrix:
         python: [3.7]
         os: [
-          # { os: macos-latest, os_arch: "x64", cibw_arch: "universal2", pip_cache: "~/Library/Caches/pip" },
-          { os: "ubuntu-latest", os_arch: "x64", cibw_arch: "x86_64", pip_cache: "~/.cache/pip" },
-          { os: "windows-latest", os_arch: "x64", cibw_arch: "AMD64", pip_cache: "~\AppData\Local\pip\Cache" }
+          # { os: macos-latest, os_arch: "x64", cibw_arch: "universal2" },
+          { os: "ubuntu-latest", os_arch: "x64", cibw_arch: "x86_64" },
+          { os: "windows-latest", os_arch: "x64", cibw_arch: "AMD64" }
         ]
 
     runs-on: ${{ matrix.os.os }}
@@ -70,11 +70,18 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           architecture: ${{ matrix.os.os_arch }}
-      - uses: actions/cache@v2
+      - name: Get pip cache dir
+        id: pip-cache
+        run: |
+          pip install --upgrade pip
+          echo "::set-output name=dir::$(pip cache dir)"
+      - name: pip cache
+        uses: actions/cache@v2
         with:
-          path: ${{ matrix.os.pip_cache }}
+          path: ${{ steps.pip-cache.outputs.dir }}
           key: ${{ runner.os }}-pip-${{ hashFiles('**/setup.py') }}
-          restore-keys: ${{ runner.os }}-pip-
+          restore-keys: |
+            ${{ runner.os }}-pip-
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
