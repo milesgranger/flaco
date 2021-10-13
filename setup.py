@@ -39,6 +39,8 @@ extension = Extension(
 )
 
 dev_requirements = [
+    "Cython",
+    "wheel",
     "pytest-runner",
     "pytest",
     "sqlalchemy",
