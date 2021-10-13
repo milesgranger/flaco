@@ -191,6 +191,13 @@ cdef class Database:
     cpdef disconnect(self):
         lib.db_disconnect(self.db_ptr)
 
+    cpdef __enter__(self):
+        self.connect()
+        return self
+
+    cpdef __exit__(self, type, value, traceback):
+        self.disconnect()
+
     def __dealloc__(self):
         if &self.db_ptr != NULL:
             lib.drop(self.db_ptr)
