@@ -58,3 +58,13 @@ which include, but not limited to:
    such types, either convert them to a supported type like text/json/jsonb 
    (ie `select my_field::text ...`), or open an issue if a standard type is not 
    supported.
+
+---
+
+### License
+
+> _Why did you choose such lax licensing? Could you change to a copy left license, please?_
+
+...just kidding, no one would ask that. This is open source, and in my opinion, 
+that means _anyone_ is free to use it, however they please. Therefore, it is
+dual licensed under [Unlicense](LICENSE) and [MIT](LICENSE-MIT). 
