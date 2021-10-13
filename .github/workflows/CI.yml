@@ -12,8 +12,7 @@ on:
 
 jobs:
 
-  build-n-test:
-
+  test:
     services:
       postgres:
         image: postgres:12
@@ -26,7 +25,27 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          default: true
+      - uses: Swatinem/rust-cache@v1
+      - name: Build libflaco
+        run: cargo build --release
+      - name: Install
+        run: python -m pip install .[dev]
+      - name: Load test data
+        run: make load-data
+      - name: Test
+        run: python setup.py test
 
+  build:
     strategy:
       matrix:
         python: [3.7]
@@ -39,42 +58,27 @@ jobs:
     runs-on: ${{ matrix.os.os }}
 
     steps:
-
       - uses: actions/checkout@v2
-
       - uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python }}
           architecture: ${{ matrix.os.os_arch }}
-
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           profile: minimal
           default: true
-
       - uses: Swatinem/rust-cache@v1
-        with:
-          cache-on-failure: true
 
       - name: Build libflaco
         run: cargo build --release
 
-      - name: Build extension test
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install numpy wheel Cython
-          python setup.py build_ext
-
       - name: Install
         run: python -m pip install .[dev]
 
-      - name: Load test data
-        run: make load-data
-
-      - name: Test
-        run: python setup.py test
+      - name: Build extension test
+        run: python setup.py build_ext
 
       - name: Build Wheels
         if: "startsWith(github.ref, 'refs/tags/')"
@@ -93,7 +97,7 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     if: "startsWith(github.ref, 'refs/tags/')"
-    needs: [ build-n-test ]
+    needs: [ build, test ]
     steps:
       - uses: actions/download-artifact@v2
         with:
