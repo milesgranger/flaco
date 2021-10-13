@@ -14,7 +14,7 @@ cdef extern from "numpy/arrayobject.h":
 
 cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     cdef bytes stmt_bytes = stmt.encode("utf-8")
-
+    cdef np.int32_t _n_rows = n_rows
     cdef lib.RowIteratorPtr row_iterator = lib.read_sql(
         <char*>stmt_bytes, db.db_ptr
     )
@@ -45,6 +45,7 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     cdef np.uint32_t row_idx = 0
     cdef np.uint32_t one = 1
     cdef np.uint32_t n_increment = 1_000
+    cdef np.uint32_t current_array_len = 0
     cdef lib.RowDataArrayPtr row_data_ptr
     cdef lib.Data data
     while True:
@@ -67,9 +68,10 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
                     )
 
             # grow arrays if next insert is passed current len
-            if n_rows == -1 and output[0].shape[0] <= row_idx:
-                for i in range(0, n_columns):
-                    resize(output[i], output[i].shape[0] + n_increment)
+            if _n_rows == -1 and current_array_len <= row_idx:
+                    for i in range(0, n_columns):
+                        resize(output[i], current_array_len + n_increment)
+                    current_array_len += n_increment
 
             for i in range(0, n_columns):
                 data = lib.index_row(row_data_ptr, i)
@@ -82,7 +84,7 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
         row_ptr = lib.next_row(row_iterator)
 
     # Ensure arrays are correct size; only if n_rows not set
-    if n_rows == -1 and output[0].shape[0] != row_idx:
+    if _n_rows == -1 and current_array_len != row_idx:
         for i in range(0, n_columns):
             resize(output[i], row_idx)
 
@@ -91,7 +93,7 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
 
     return {columns[i]: output[i] for i in range(columns.shape[0])}
 
-cdef resize(np.ndarray array, int len):
+cdef void resize(np.ndarray array, np.uint32_t len):
     array.resize(len, refcheck=False)
 
 cdef np.ndarray array_init(lib.Data data, int len):
