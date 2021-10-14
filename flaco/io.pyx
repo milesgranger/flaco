@@ -96,17 +96,19 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
 
     return {columns[i]: output[i] for i in range(columns.shape[0])}
 
-cdef void resize(np.ndarray arr, int len):
+cdef int resize(np.ndarray arr, int len) except -1:
     cdef int refcheck = 0
     cdef np.PyArray_Dims dims;
     cdef np.npy_intp dims_arr[1]
     dims_arr[0] = <np.npy_intp>len
     dims.ptr = <np.npy_intp*>&dims_arr
     dims.len = 1
-    cdef PyObject *ret
-    # TODO: potential error!
-    np.PyArray_Resize(arr, &dims, refcheck, np.NPY_CORDER)
-    #print(obj)
+    cdef object ret
+    ret = np.PyArray_Resize(arr, &dims, refcheck, np.NPY_CORDER)
+    if ret is not None:
+        return -1
+    else:
+        return 0
 
 
 cdef np.ndarray array_init(lib.Data data, int len):
