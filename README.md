@@ -66,6 +66,5 @@ which include, but not limited to:
 
 > _Why did you choose such lax licensing? Could you change to a copy left license, please?_
 
-...just kidding, no one would ask that. This is open source, and in my opinion, 
-that means _anyone_ is free to use it. Therefore, it is
-dual licensed under [Unlicense](LICENSE) and [MIT](LICENSE-MIT). 
+...just kidding, no one would ask that. This is dual licensed under 
+[Unlicense](LICENSE) and [MIT](LICENSE-MIT). 
