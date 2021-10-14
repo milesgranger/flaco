@@ -102,8 +102,6 @@ DatabasePtr db_create(const char *uri_ptr);
 
 void db_disconnect(DatabasePtr ptr);
 
-intptr_t *dims(intptr_t size);
-
 void drop(uint32_t *ptr);
 
 void free_row(RowPtr ptr);

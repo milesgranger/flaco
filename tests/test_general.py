@@ -31,10 +31,8 @@ def test_basic_select_all_tables(postgresdb_connection_uri, table):
 
     df1 = pd.read_sql_table(table, con=create_engine(postgresdb_connection_uri))
 
-    db = Database(postgresdb_connection_uri)
-    db.connect()
-    data = read_sql(query, db)
-    db.disconnect()
+    with Database(postgresdb_connection_uri) as db:
+        data = read_sql(query, db)
     df2 = pd.DataFrame(data, copy=False)
 
     assert set(df1.columns) == set(df2.columns)

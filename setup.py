@@ -42,6 +42,7 @@ dev_requirements = [
     "Cython",
     "wheel",
     "pytest-runner",
+    "pytest-benchmark~=3.0",
     "pytest",
     "sqlalchemy",
     "psycopg2-binary<2.9.0",

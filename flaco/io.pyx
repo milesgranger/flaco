@@ -9,6 +9,7 @@ from cpython.object cimport PyObject
 from libc.stdlib cimport malloc
 from flaco cimport includes as lib
 
+
 np.import_array()
 
 cdef extern from "numpy/arrayobject.h":
