@@ -13,7 +13,7 @@ type DatabasePtr = *mut u32;
 type RowIteratorPtr = *mut u32;
 type RowPtr = *mut u32;
 type RowDataArrayPtr = *mut u32;
-type RowColumnNamesArrayPtr = *const *const c_char;
+type RowColumnNamesArrayPtr = *const *mut c_char;
 
 /// Supports creating connections to a given connection URI
 pub struct Database {
@@ -88,7 +88,7 @@ pub extern "C" fn db_connect(ptr: DatabasePtr) {
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct BytesPtr {
-    ptr: *const u8,
+    ptr: *mut u8,
     len: u32,
 }
 
@@ -133,7 +133,7 @@ impl From<Option<Vec<u8>>> for Data {
     fn from(val: Option<Vec<u8>>) -> Self {
         match val {
             Some(v) => {
-                let ptr = v.as_ptr();
+                let ptr = v.as_ptr() as _;
                 let len = v.len() as u32;
                 mem::forget(v);
                 Data::Bytes(BytesPtr { ptr, len })
@@ -312,7 +312,7 @@ pub extern "C" fn row_column_names(row_ptr: RowPtr) -> RowColumnNamesArrayPtr {
     mem::forget(row);
     let ptr = names.as_ptr();
     mem::forget(names);
-    ptr
+    ptr as _
 }
 
 #[no_mangle]

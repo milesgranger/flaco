@@ -3,16 +3,22 @@
 
 cimport numpy as np
 import numpy as np
-from decimal import Decimal
+import array
+from cpython cimport array
+from cpython.object cimport PyObject
 from libc.stdlib cimport malloc
 from flaco cimport includes as lib
 
+
 np.import_array()
+
+cdef extern from "numpy/arrayobject.h":
+    void PyArray_ENABLEFLAGS(np.ndarray arr, int flags)
 
 
 cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     cdef bytes stmt_bytes = stmt.encode("utf-8")
-
+    cdef np.int32_t _n_rows = n_rows
     cdef lib.RowIteratorPtr row_iterator = lib.read_sql(
         <char*>stmt_bytes, db.db_ptr
     )
@@ -31,7 +37,7 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     # build columns
     cdef np.ndarray columns = np.zeros(shape=n_columns, dtype=object)
 
-    cdef int i
+    cdef np.uint32_t i
     for i in range(0, n_columns):
         columns[i] = row_col_names[i].decode()
 
@@ -41,7 +47,9 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
 
     # Begin looping until no rows are returned
     cdef np.uint32_t row_idx = 0
-    cdef int n_increment = 1_000
+    cdef np.uint32_t one = 1
+    cdef np.uint32_t n_increment = 1_000
+    cdef np.uint32_t current_array_len = 0
     cdef lib.RowDataArrayPtr row_data_ptr
     cdef lib.Data data
     while True:
@@ -64,9 +72,10 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
                     )
 
             # grow arrays if next insert is passed current len
-            if n_rows == -1 and output[0].shape[0] <= row_idx:
-                for i in range(0, n_columns):
-                    resize(output[i], output[i].shape[0] + n_increment)
+            if _n_rows == -1 and current_array_len <= row_idx:
+                    for i in range(0, n_columns):
+                        resize(output[i], current_array_len + n_increment)
+                    current_array_len += n_increment
 
             for i in range(0, n_columns):
                 data = lib.index_row(row_data_ptr, i)
@@ -74,12 +83,12 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
 
             lib.free_row_data_array(row_data_ptr)
             lib.free_row(row_ptr)
-            row_idx += 1
+            row_idx += one
 
         row_ptr = lib.next_row(row_iterator)
 
     # Ensure arrays are correct size; only if n_rows not set
-    if n_rows == -1 and output[0].shape[0] != row_idx:
+    if _n_rows == -1 and current_array_len != row_idx:
         for i in range(0, n_columns):
             resize(output[i], row_idx)
 
@@ -88,8 +97,20 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
 
     return {columns[i]: output[i] for i in range(columns.shape[0])}
 
-cdef resize(np.ndarray array, int len):
-    array.resize(len, refcheck=False)
+cdef int resize(np.ndarray arr, int len) except -1:
+    cdef int refcheck = 0
+    cdef np.PyArray_Dims dims;
+    cdef np.npy_intp dims_arr[1]
+    dims_arr[0] = <np.npy_intp>len
+    dims.ptr = <np.npy_intp*>&dims_arr
+    dims.len = 1
+    cdef object ret
+    ret = np.PyArray_Resize(arr, &dims, refcheck, np.NPY_CORDER)
+    if ret is not None:
+        return -1
+    else:
+        return 0
+
 
 cdef np.ndarray array_init(lib.Data data, int len):
     cdef np.ndarray array
@@ -120,9 +141,6 @@ cdef np.ndarray array_init(lib.Data data, int len):
     else:
         raise ValueError(f"Unsupported tag: {data.tag}")
     return array
-
-cdef extern from "numpy/arrayobject.h":
-    void PyArray_ENABLEFLAGS(np.ndarray arr, int flags)
 
 
 cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
@@ -172,6 +190,7 @@ cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         raise ValueError(f"Unsupported Data enum {data.tag}")
 
 
+
 cdef class Database:
 
     cdef lib.DatabasePtr db_ptr
@@ -190,6 +209,13 @@ cdef class Database:
 
     cpdef disconnect(self):
         lib.db_disconnect(self.db_ptr)
+
+    cpdef __enter__(self):
+        self.connect()
+        return self
+
+    cpdef __exit__(self, type, value, traceback):
+        self.disconnect()
 
     def __dealloc__(self):
         if &self.db_ptr != NULL:

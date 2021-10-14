@@ -10,8 +10,10 @@ Perhaps the fastest and most memory efficient way to
 pull data from PostgreSQL into [pandas](https://pandas.pydata.org/) 
 and [numpy](https://numpy.org/doc/stable/index.html). 🚀
 
+Have a gander at the initial [benchmarks](./benchmarks) 🏋
+
 Initial testing seems to indicate ~4x less memory use
-over standard use of `pandas.read_sql` and about ~2x faster.
+over standard `pandas.read_sql` and about ~2x faster.
 However, it's probably 100x less stable at the moment. 😜
 
 ---
@@ -21,21 +23,23 @@ However, it's probably 100x less stable at the moment. 😜
 ```python
 from flaco.io import read_sql, Database
 
-con = Database("postgresql://postgres:postgres@localhost:5432/postgres")
 
+uri = "postgresql://postgres:postgres@localhost:5432/postgres"
 stmt = "select * from my_big_table"
-data = read_sql(stmt, con)  # dict of column name to numpy array
+
+with Database(uri) as con:
+    data = read_sql(stmt, con)  # dict of column name to numpy array
 
 # If you have pandas installed, you can create a DataFrame
 # with zero copying like this:
 import pandas as pd
-df = pd.DataFrame(data, copy=False)
-
+df = pd.DataFrame(data)
 
 # If you know the _exact_ rows which will be returned
 # you can supply n_rows to perform a single array 
 # allocation without needing to resize during query reading.
-data = read_sql(stmt, con, 1_000)
+with Database(uri) as con:
+    data = read_sql(stmt, con, 1_000)
 ```
 
 ---
@@ -58,3 +62,12 @@ which include, but not limited to:
    such types, either convert them to a supported type like text/json/jsonb 
    (ie `select my_field::text ...`), or open an issue if a standard type is not 
    supported.
+
+---
+
+### License
+
+> _Why did you choose such lax licensing? Could you change to a copy left license, please?_
+
+...just kidding, no one would ask that. This is dual licensed under 
+[Unlicense](LICENSE) and [MIT](LICENSE-MIT). 

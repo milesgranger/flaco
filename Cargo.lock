@@ -155,7 +155,6 @@ version = "0.2.0"
 dependencies = [
  "cbindgen",
  "postgres",
- "postgres-protocol",
  "rust_decimal",
  "serde_json",
  "time",

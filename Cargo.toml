@@ -1,5 +1,5 @@
 [package]
-name = "flaco"
+name    = "flaco"
 version = "0.2.0"
 edition = "2018"
 license = "Unlicense/MIT"
@@ -9,22 +9,21 @@ license = "Unlicense/MIT"
 crate-type = ["staticlib"]
 
 [dependencies]
+uuid         = "0.8.2"
+serde_json   = "1.0.68"
 rust_decimal = { version = "1.16.0", features = ["db-postgres"] }
-uuid = "0.8.2"
-time = { version = "0.3.3", features = ["formatting"] }
-serde_json = "1.0.68"
-postgres = { version = "0.19.1", features =["with-serde_json-1", "with-time-0_3", "with-uuid-0_8"] }
-postgres-protocol = "0.6.2"
+time         = { version = "0.3.3",  features = ["formatting"] }
+postgres     = { version = "0.19.1", features = ["with-serde_json-1", "with-time-0_3", "with-uuid-0_8"] }
 
 [build-dependencies]
 cbindgen = "^0.6.0"
 
 [profile.dev]
-lto = false
+lto   = false
 debug = true
 
 [profile.release]
-lto = true
-debug = false
+lto         = true
+debug       = false
 incremental = false
-opt-level = 3
+opt-level   = 3

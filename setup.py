@@ -39,11 +39,13 @@ extension = Extension(
 )
 
 dev_requirements = [
+    "Cython",
+    "wheel",
     "pytest-runner",
+    "pytest-benchmark~=3.0",
     "pytest",
-    "docker",
     "sqlalchemy",
-    "psycopg2",
+    "psycopg2-binary<2.9.0",
     "hypothesis",
     "pandas",
 ]
