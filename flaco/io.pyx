@@ -16,7 +16,7 @@ cdef extern from "numpy/arrayobject.h":
 cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     cdef bytes stmt_bytes = stmt.encode("utf-8")
     cdef np.int32_t _n_rows = n_rows
-    cdef char *exc = <char*>malloc(sizeof(char))
+    cdef char *exc = NULL
     cdef str err_msg
 
     cdef lib.RowIteratorPtr row_iterator = lib.read_sql(
@@ -24,7 +24,6 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     )
     if exc != NULL:
         err_msg = exc.decode()
-        free(exc)
         raise FlacoException(err_msg)
 
     # Read first row
@@ -101,7 +100,6 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     lib.free_row_data_array(row_data_array_ptr, row_len)
     lib.free_row_iter(row_iterator)
     lib.free_row_column_names(row_col_names)
-
     return {columns[i]: output[i] for i in range(columns.shape[0])}
 
 cdef int resize(np.ndarray arr, int len) except -1:

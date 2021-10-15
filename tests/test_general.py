@@ -120,7 +120,7 @@ def test_mixed_types_and_nulls(postgresdb_engine, postgresdb_connection_uri):
 def test_query_without_connect_error(postgresdb_connection_uri):
     db = Database(postgresdb_connection_uri)
     with pytest.raises(FlacoException):
-        read_sql("selec * from foo", db)
+        read_sql("select * from payment", db)
 
 
 def test_query_error(postgresdb_connection_uri):
