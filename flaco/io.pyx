@@ -118,15 +118,15 @@ cdef int resize(np.ndarray arr, int len) except -1:
 cdef np.ndarray array_init(lib.Data data, int len):
     cdef np.ndarray array
     if data.tag == lib.Data_Tag.Int8:
-        array = np.empty(shape=len, dtype=object)
+        array = np.empty(shape=len, dtype=np.int8)
     elif data.tag == lib.Data_Tag.Int16:
-        array = np.empty(shape=len, dtype=object)
+        array = np.empty(shape=len, dtype=np.int16)
     elif data.tag == lib.Data_Tag.Uint32:
-        array = np.empty(shape=len, dtype=object)
+        array = np.empty(shape=len, dtype=np.uint32)
     elif data.tag == lib.Data_Tag.Int32:
-        array = np.empty(shape=len, dtype=object)
+        array = np.empty(shape=len, dtype=np.int32)
     elif data.tag == lib.Data_Tag.Int64:
-        array = np.empty(shape=len, dtype=object)
+        array = np.empty(shape=len, dtype=np.int64)
     elif data.tag == lib.Data_Tag.Float32:
         array = np.empty(shape=len, dtype=np.float32)
     elif data.tag == lib.Data_Tag.Float64:
@@ -136,7 +136,7 @@ cdef np.ndarray array_init(lib.Data data, int len):
     elif data.tag == lib.Data_Tag.Boolean:
         array = np.empty(shape=len, dtype=bool)
     elif data.tag == lib.Data_Tag.Bytes:
-        array = np.empty(shape=len, dtype=object)
+        array = np.empty(shape=len, dtype=np.ndarray[np.uint8])
     elif data.tag == lib.Data_Tag.Decimal:
         array = np.empty(shape=len, dtype=np.float64)
     elif data.tag == lib.Data_Tag.Null:
