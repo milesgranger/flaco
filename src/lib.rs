@@ -286,7 +286,7 @@ pub extern "C" fn row_data(row_ptr: RowPtr, array_ptr: RowDataArrayPtr) {
             }
             _ => unimplemented!("Unimplemented conversion for type: '{}'", type_.name()),
         };
-        values.push(val)
+        values[i] = val;
     }
     mem::forget(row);
     mem::forget(values);
@@ -332,12 +332,9 @@ pub extern "C" fn free_row_column_names(ptr: RowColumnNamesArrayPtr) {
 
 #[no_mangle]
 pub extern "C" fn index_row(row_ptr: RowDataArrayPtr, len: u32, idx: u32) -> Data {
-    println!("Row len: {}", len);
     let row: Vec<Data> = unsafe { Vec::from_raw_parts(row_ptr as _, len as usize, len as usize) };
-    println!("{:?}", &row);
     let data = row[idx as usize].clone();
     mem::forget(row);
-    println!("Got data in index_row, exiting!");
     data
 }
 

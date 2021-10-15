@@ -62,7 +62,6 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
 
             # Get and insert new row
             lib.row_data(row_ptr, row_data_array_ptr)
-            print("got data array ptr")
             if row_data_array_ptr == NULL:
                 raise TypeError(f"Unable to pull row data, likely an unsupported type. Check stderr output.")
 
@@ -70,30 +69,22 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
                 # Initialize arrays for output
                 # will resize at `n_increment` if `n_rows` is not set.
                 for i in range(0, n_columns):
-                    print(f"attempting to index data array len: {row_len}, index: {i}")
                     data = lib.index_row(row_data_array_ptr, row_len, i)
-                    print("indexed data array and got data")
                     output.append(
                         array_init(data, n_increment if n_rows == -1 else n_rows)
                     )
 
             # grow arrays if next insert is passed current len
             if _n_rows == -1 and current_array_len <= row_idx:
-                    print("resizing...")
                     for i in range(0, n_columns):
                         resize(output[i], current_array_len + n_increment)
-                    print("resized arrays")
                     current_array_len += n_increment
 
             for i in range(0, n_columns):
                 data = lib.index_row(row_data_array_ptr, row_len, i)
-                print("got data from index, inserting into array")
                 insert_data_into_array(data, output[i], row_idx)
-                print("inserted into array")
 
-            print("freeing row")
             lib.free_row(row_ptr)
-            print("freed row")
             row_idx += one
 
         row_ptr = lib.next_row(row_iterator)

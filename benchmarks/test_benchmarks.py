@@ -88,12 +88,12 @@ def _table_setup(n_rows: int = 1_000_000, n_cols: int = 5):
 def memory_profile():
     stmt = "select * from test_table"
 
-    #engine = create_engine(DB_URI)
-    #_pandas_df1 = pd.read_sql(stmt, engine)
+    engine = create_engine(DB_URI)
+    _pandas_df1 = pd.read_sql(stmt, engine)
 
-    with Database(DB_URI) as con:
-        data1 = read_sql(stmt, con)
-        _flaco_df1 = pd.DataFrame(data1, copy=False)
+    #with Database(DB_URI) as con:
+    #    data1 = read_sql(stmt, con)
+    #    _flaco_df1 = pd.DataFrame(data1, copy=False)
 
 if __name__ == '__main__':
     #_table_setup(n_rows=1_000_000)
