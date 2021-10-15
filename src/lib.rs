@@ -341,11 +341,7 @@ pub extern "C" fn row_column_names(row_ptr: RowPtr) -> RowColumnNamesArrayPtr {
         .iter()
         .map(|col| col.name())
         .map(|name| ffi::CString::new(name).unwrap())
-        .map(|name| {
-            let ptr = name.as_ptr();
-            mem::forget(name);
-            ptr
-        })
+        .map(|name| name.into_raw() as _)
         .collect::<Vec<*const c_char>>();
     mem::forget(row);
     let ptr = names.as_ptr();
