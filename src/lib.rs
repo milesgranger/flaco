@@ -48,6 +48,14 @@ impl Database {
     }
 }
 
+#[inline(always)]
+fn string_into_exception(msg: String, exc: Exception) {
+    let msg = CString::new(msg).unwrap();
+    unsafe { *exc = msg.into_raw() };
+    mem::forget(exc);
+
+}
+
 #[no_mangle]
 pub extern "C" fn db_create(uri_ptr: *const c_char) -> DatabasePtr {
     let uri_c = unsafe { ffi::CStr::from_ptr(uri_ptr) };
@@ -72,22 +80,17 @@ pub extern "C" fn read_sql(
                 Box::into_raw(boxed_row_iter) as RowIteratorPtr
             }
             Err(e) => {
-                let msg = CString::new(e.to_string()).unwrap();
-                unsafe { *exc = msg.into_raw() };
+                string_into_exception(e.to_string(), exc);
                 std::ptr::null_mut()
             }
         },
         None => {
-            let msg = CString::new(
-                "Not connected. Use 'with Database(...) as con', or call '.connect()'",
-            )
-            .unwrap();
-            unsafe { *exc = msg.into_raw() };
+            let msg = "Not connected. Use 'with Database(...) as con', or call '.connect()'".to_string();
+            string_into_exception(msg, exc);
             std::ptr::null_mut()
         }
     };
     mem::forget(db);
-    mem::forget(exc);
     res
 }
 
