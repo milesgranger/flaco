@@ -182,11 +182,21 @@ pub extern "C" fn free_row(ptr: RowPtr) {
 }
 
 #[no_mangle]
-pub extern "C" fn row_data(row_ptr: RowPtr) -> RowDataArrayPtr {
+pub extern "C" fn init_row_data_array(row_ptr: RowPtr) -> RowDataArrayPtr {
     let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row) };
     let len = row.len();
-    let mut values = Vec::with_capacity(len);
-    for i in 0..len {
+    let mut values = vec![Data::Null; len];
+    let ptr = values.as_mut_ptr();
+    mem::forget(values);
+    mem::forget(row);
+    ptr as _
+}
+
+#[no_mangle]
+pub extern "C" fn row_data(row_ptr: RowPtr, array_ptr: RowDataArrayPtr) {
+    let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row) };
+    let mut values = unsafe { Vec::from_raw_parts(array_ptr as _, row.len(), row.len()) };
+    for i in 0..values.len() {
         let type_ = row.columns()[i].type_();
         // TODO: postgres-types: expose Inner enum which these variations
         // and have postgres Row.type/(or something) expose the variant
@@ -202,7 +212,7 @@ pub extern "C" fn row_data(row_ptr: RowPtr) -> RowDataArrayPtr {
                 let val: Option<f64> = row.get(i);
                 Data::Float64(val.unwrap_or_else(|| f64::NAN))
             }
-            "real" => {
+            "real" | "float4" => {
                 let val: Option<f32> = row.get(i);
                 Data::Float32(val.unwrap_or_else(|| f32::NAN))
             }
@@ -276,15 +286,15 @@ pub extern "C" fn row_data(row_ptr: RowPtr) -> RowDataArrayPtr {
             }
             _ => unimplemented!("Unimplemented conversion for type: '{}'", type_.name()),
         };
-        values.push(val)
+        values[i] = val;
     }
     mem::forget(row);
-    Box::into_raw(Box::new(values)) as RowDataArrayPtr
+    mem::forget(values);
 }
 
 #[no_mangle]
-pub extern "C" fn free_row_data_array(ptr: RowDataArrayPtr) {
-    let _ = unsafe { Box::from_raw(ptr as *mut Vec<Data>) };
+pub extern "C" fn free_row_data_array(ptr: RowDataArrayPtr, len: u32) {
+    let _: Vec<Data> = unsafe { Vec::from_raw_parts(ptr as _, len as usize, len as usize) };
 }
 
 #[no_mangle]
@@ -321,8 +331,8 @@ pub extern "C" fn free_row_column_names(ptr: RowColumnNamesArrayPtr) {
 }
 
 #[no_mangle]
-pub extern "C" fn index_row(row_ptr: RowDataArrayPtr, idx: u32) -> Data {
-    let row = unsafe { Box::from_raw(row_ptr as *mut Vec<Data>) };
+pub extern "C" fn index_row(row_ptr: RowDataArrayPtr, len: u32, idx: u32) -> Data {
+    let row: Vec<Data> = unsafe { Vec::from_raw_parts(row_ptr as _, len as usize, len as usize) };
     let data = row[idx as usize].clone();
     mem::forget(row);
     data

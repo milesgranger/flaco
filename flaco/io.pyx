@@ -3,9 +3,6 @@
 
 cimport numpy as np
 import numpy as np
-import array
-from cpython cimport array
-from cpython.object cimport PyObject
 from libc.stdlib cimport malloc
 from flaco cimport includes as lib
 
@@ -30,6 +27,8 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
         lib.free_row_iter(row_iterator)
         return dict()  # query returned no rows
 
+    cdef lib.RowDataArrayPtr row_data_array_ptr = lib.init_row_data_array(row_ptr)
+
     # get column names and row len
     cdef lib.RowColumnNamesArrayPtr row_col_names = lib.row_column_names(row_ptr)
     cdef np.uint32_t n_columns = lib.n_columns(row_ptr)
@@ -52,21 +51,22 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     cdef np.uint32_t current_array_len = 0
     cdef lib.RowDataArrayPtr row_data_ptr
     cdef lib.Data data
+    cdef np.uint32_t row_len = columns.shape[0]
     while True:
         if row_ptr == NULL:
             break
         else:
 
             # Get and insert new row
-            row_data_ptr = lib.row_data(row_ptr)
-            if row_data_ptr == NULL:
+            lib.row_data(row_ptr, row_data_array_ptr)
+            if row_data_array_ptr == NULL:
                 raise TypeError(f"Unable to pull row data, likely an unsupported type. Check stderr output.")
 
             if row_idx == 0:
                 # Initialize arrays for output
                 # will resize at `n_increment` if `n_rows` is not set.
                 for i in range(0, n_columns):
-                    data = lib.index_row(row_data_ptr, i)
+                    data = lib.index_row(row_data_array_ptr, row_len, i)
                     output.append(
                         array_init(data, n_increment if n_rows == -1 else n_rows)
                     )
@@ -78,10 +78,9 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
                     current_array_len += n_increment
 
             for i in range(0, n_columns):
-                data = lib.index_row(row_data_ptr, i)
-                insert_data_into_array(data, output[i], row_idx)
+                data = lib.index_row(row_data_array_ptr, row_len, i)
+                output[i] = insert_data_into_array(data, output[i], row_idx)
 
-            lib.free_row_data_array(row_data_ptr)
             lib.free_row(row_ptr)
             row_idx += one
 
@@ -92,6 +91,7 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
         for i in range(0, n_columns):
             resize(output[i], row_idx)
 
+    lib.free_row_data_array(row_data_array_ptr, row_len)
     lib.free_row_iter(row_iterator)
     lib.free_row_column_names(row_col_names)
 
@@ -115,15 +115,15 @@ cdef int resize(np.ndarray arr, int len) except -1:
 cdef np.ndarray array_init(lib.Data data, int len):
     cdef np.ndarray array
     if data.tag == lib.Data_Tag.Int8:
-        array = np.empty(shape=len, dtype=object)
+        array = np.empty(shape=len, dtype=np.int8)
     elif data.tag == lib.Data_Tag.Int16:
-        array = np.empty(shape=len, dtype=object)
+        array = np.empty(shape=len, dtype=np.int16)
     elif data.tag == lib.Data_Tag.Uint32:
-        array = np.empty(shape=len, dtype=object)
+        array = np.empty(shape=len, dtype=np.uint32)
     elif data.tag == lib.Data_Tag.Int32:
-        array = np.empty(shape=len, dtype=object)
+        array = np.empty(shape=len, dtype=np.int32)
     elif data.tag == lib.Data_Tag.Int64:
-        array = np.empty(shape=len, dtype=object)
+        array = np.empty(shape=len, dtype=np.int64)
     elif data.tag == lib.Data_Tag.Float32:
         array = np.empty(shape=len, dtype=np.float32)
     elif data.tag == lib.Data_Tag.Float64:
@@ -133,7 +133,7 @@ cdef np.ndarray array_init(lib.Data data, int len):
     elif data.tag == lib.Data_Tag.Boolean:
         array = np.empty(shape=len, dtype=bool)
     elif data.tag == lib.Data_Tag.Bytes:
-        array = np.empty(shape=len, dtype=object)
+        array = np.empty(shape=len, dtype=bytearray)
     elif data.tag == lib.Data_Tag.Decimal:
         array = np.empty(shape=len, dtype=np.float64)
     elif data.tag == lib.Data_Tag.Null:
@@ -143,7 +143,7 @@ cdef np.ndarray array_init(lib.Data data, int len):
     return array
 
 
-cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
+cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
     cdef np.ndarray[np.uint8_t, ndim=1] arr_bytes
     cdef np.npy_intp intp
 
@@ -184,12 +184,13 @@ cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         arr[idx] = data.decimal._0
 
     elif data.tag == lib.Data_Tag.Null:
+        if arr.dtype != object:
+            arr = arr.astype(object, copy=False)
         arr[idx] = None
 
     else:
         raise ValueError(f"Unsupported Data enum {data.tag}")
-
-
+    return arr
 
 cdef class Database:
 

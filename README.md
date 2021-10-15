@@ -12,8 +12,8 @@ and [numpy](https://numpy.org/doc/stable/index.html). 🚀
 
 Have a gander at the initial [benchmarks](./benchmarks) 🏋
 
-Initial testing seems to indicate ~4x less memory use
-over standard `pandas.read_sql` and about ~2x faster.
+Initial testing seems to indicate ~2x less memory use
+over standard `pandas.read_sql` and about ~3x faster.
 However, it's probably 100x less stable at the moment. 😜
 
 ---
@@ -33,7 +33,7 @@ with Database(uri) as con:
 # If you have pandas installed, you can create a DataFrame
 # with zero copying like this:
 import pandas as pd
-df = pd.DataFrame(data)
+df = pd.DataFrame(data, copy=False)
 
 # If you know the _exact_ rows which will be returned
 # you can supply n_rows to perform a single array 
@@ -46,7 +46,19 @@ with Database(uri) as con:
 
 # Notes
 
-While it's pretty neat this lib can allow faster and less resource
+> Is this a drop in replacement for `pandas.read_sql`?
+
+No. It varies in a few ways:
+- It will return a `dict` of `str` ➡ `numpy.ndarray` objects. But this 
+  can be passed with _zero_ copies to  `pandas.DataFrame`
+- When querying integer columns, if a null is encountered, the array will be 
+  converted to `dtype=object` and nulls from PostgreSQL will be `None`. 
+  Whereas pandas will convert the underlying array to a float type; where nulls
+  from postgres are basically `numpy.nan` types.
+- It lacks basically all of the options `pandas.read_sql` has.
+
+
+Furthermore, while it's pretty neat this lib can allow faster and less resource
 intensive use of numpy/pandas against PostgreSQL, it's in early 
 stages of development and you're likely to encounter some sharp edges
 which include, but not limited to:

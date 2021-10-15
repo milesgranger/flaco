@@ -22,9 +22,7 @@ else:
     extra_link_args = ["-l:libflaco.a"]
     extra_compile_args = ["-fopenmp", "-O3"]
 
-assert (
-    flaco_lib_file.is_file()
-), "flaco lib not built; run 'cargo build --release' first."
+assert flaco_lib_file.is_file(), "flaco lib not built; run 'cargo build --release'"
 
 
 extension = Extension(
@@ -46,6 +44,7 @@ dev_requirements = [
     "pytest",
     "sqlalchemy",
     "psycopg2-binary<2.9.0",
+    "memory-profiler==0.58.0",
     "hypothesis",
     "pandas",
 ]

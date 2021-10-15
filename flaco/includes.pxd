@@ -98,7 +98,9 @@ cdef extern from "./flaco.h":
     RowColumnNamesArrayPtr row_column_names(RowPtr row_ptr)
     void free_row_column_names(RowColumnNamesArrayPtr ptr)
 
-    RowDataArrayPtr row_data(RowPtr row_ptr)
-    void free_row_data_array(RowDataArrayPtr ptr)
+    RowDataArrayPtr init_row_data_array(RowPtr row_ptr)
 
-    Data index_row(RowPtr row_ptr, np.uint32_t idx)
+    void row_data(RowPtr row_ptr, RowDataArrayPtr array_ptr)
+    void free_row_data_array(RowDataArrayPtr ptr, np.uint32_t len)
+
+    Data index_row(RowPtr row_ptr, np.uint32_t len, np.uint32_t idx)
