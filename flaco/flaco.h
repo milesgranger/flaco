@@ -126,4 +126,4 @@ RowIteratorPtr read_sql(const char *stmt_ptr, DatabasePtr db_ptr, Exception exc)
 
 RowColumnNamesArrayPtr row_column_names(RowPtr row_ptr);
 
-void row_data(RowPtr row_ptr, RowDataArrayPtr array_ptr);
+void row_data(RowPtr row_ptr, RowDataArrayPtr array_ptr, Exception exc);

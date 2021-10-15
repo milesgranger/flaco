@@ -15,7 +15,7 @@ from flaco.io import read_sql, Database, FlacoException
         "city",
         "country",
         "customer",
-        # "film",  # unsuppoted custom `mpaa_rating` TODO: support arbitrary types by serializing to string?
+        "film",  # unsupported custom `mpaa_rating` TODO: support arbitrary types by serializing to string?
         "film_actor",
         "film_category",
         "inventory",
@@ -33,7 +33,14 @@ def test_basic_select_all_tables(postgresdb_connection_uri, table):
     df1 = pd.read_sql_table(table, con=create_engine(postgresdb_connection_uri))
 
     with Database(postgresdb_connection_uri) as db:
-        data = read_sql(query, db)
+        if table == "film":
+            # there is a custom type called 'tsvector'; we should catch
+            # unimplemented type conversions.
+            with pytest.raises(FlacoException):
+                read_sql(query, db)
+            return
+        else:
+            data = read_sql(query, db)
     df2 = pd.DataFrame(data, copy=False)
 
     assert set(df1.columns) == set(df2.columns)

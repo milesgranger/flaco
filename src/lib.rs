@@ -49,11 +49,9 @@ impl Database {
 }
 
 #[inline(always)]
-fn string_into_exception(msg: String, exc: Exception) {
-    let msg = CString::new(msg).unwrap();
+fn string_into_exception<S: ToString>(msg: S, exc: Exception) {
+    let msg = CString::new(msg.to_string()).unwrap();
     unsafe { *exc = msg.into_raw() };
-    mem::forget(exc);
-
 }
 
 #[no_mangle]
@@ -80,12 +78,12 @@ pub extern "C" fn read_sql(
                 Box::into_raw(boxed_row_iter) as RowIteratorPtr
             }
             Err(e) => {
-                string_into_exception(e.to_string(), exc);
+                string_into_exception(e, exc);
                 std::ptr::null_mut()
             }
         },
         None => {
-            let msg = "Not connected. Use 'with Database(...) as con', or call '.connect()'".to_string();
+            let msg = "Not connected. Use 'with Database(...) as con', or call '.connect()'";
             string_into_exception(msg, exc);
             std::ptr::null_mut()
         }
@@ -216,7 +214,7 @@ pub extern "C" fn init_row_data_array(row_ptr: RowPtr) -> RowDataArrayPtr {
 }
 
 #[no_mangle]
-pub extern "C" fn row_data(row_ptr: RowPtr, array_ptr: RowDataArrayPtr) {
+pub extern "C" fn row_data(row_ptr: RowPtr, array_ptr: RowDataArrayPtr, exc: Exception) {
     let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row) };
     let mut values = unsafe { Vec::from_raw_parts(array_ptr as _, row.len(), row.len()) };
     for i in 0..values.len() {
@@ -307,7 +305,14 @@ pub extern "C" fn row_data(row_ptr: RowPtr, array_ptr: RowDataArrayPtr) {
                     None => Data::Null,
                 }
             }
-            _ => unimplemented!("Unimplemented conversion for type: '{}'", type_.name()),
+            _ => {
+                let msg = format!(
+                    "Unimplemented conversion for: '{}'; consider casting to text",
+                    type_.name()
+                );
+                string_into_exception(msg, exc);
+                Data::Null
+            }
         };
         values[i] = val;
     }

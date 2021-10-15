@@ -64,7 +64,16 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
         else:
 
             # Get and insert new row
-            lib.row_data(row_ptr, row_data_array_ptr)
+            lib.row_data(row_ptr, row_data_array_ptr, &exc)
+
+            if exc != NULL:
+                if row_data_array_ptr != NULL:
+                    lib.free_row_data_array(row_data_array_ptr, row_len)
+                lib.free_row_iter(row_iterator)
+                lib.free_row_column_names(row_col_names)
+                err_msg = exc.decode()
+                raise FlacoException(err_msg)
+
             if row_data_array_ptr == NULL:
                 raise TypeError(f"Unable to pull row data, likely an unsupported type. Check stderr output.")
 

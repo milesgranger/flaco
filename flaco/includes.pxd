@@ -100,7 +100,7 @@ cdef extern from "./flaco.h":
 
     RowDataArrayPtr init_row_data_array(RowPtr row_ptr)
 
-    void row_data(RowPtr row_ptr, RowDataArrayPtr array_ptr)
+    void row_data(RowPtr row_ptr, RowDataArrayPtr array_ptr, Exception exc)
     void free_row_data_array(RowDataArrayPtr ptr, np.uint32_t len)
 
     Data index_row(RowPtr row_ptr, np.uint32_t len, np.uint32_t idx)
