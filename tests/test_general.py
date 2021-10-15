@@ -1,6 +1,7 @@
 import timeit
 import pytest
 import pandas as pd
+import numpy as np
 from sqlalchemy import create_engine
 from flaco.io import read_sql, Database
 
@@ -79,3 +80,28 @@ def test_simple_group_by(postgresdb_engine, postgresdb_connection_uri, simple_ta
     df1_group = df1.groupby("col1").max()
     df2_group = df2.groupby("col1").max()
     assert df1_group.equals(df2_group)
+
+
+def test_mixed_types_and_nulls(postgresdb_engine, postgresdb_connection_uri):
+    table = "test_table"
+    n_rows = 10
+    engine = postgresdb_engine
+
+    df = pd.DataFrame()
+    df["col1"] = np.random.randint(0, 1_000, size=n_rows).astype(np.int32)
+    df["col2"] = df.col1.astype(np.uint32)
+    df["col3"] = df.col1.astype(np.float32)
+    df["col4"] = df.col1.astype(np.float64)
+    df["col5"] = df.col1.astype(str) + "-hello"
+    df["col6"] = df.col5.astype(bytes)
+    df.to_sql(table, index=False, con=engine, if_exists="replace")
+    df = df[:2]
+    df.loc[:, :] = None
+    df.to_sql(table, index=False, con=engine, if_exists="append")
+
+    # This should work fine
+    with Database(postgresdb_connection_uri) as con:
+        data = read_sql(f"select * from {table}", con)
+
+    # Last two rows should all be None
+    # TODO

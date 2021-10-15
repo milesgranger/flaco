@@ -46,7 +46,19 @@ with Database(uri) as con:
 
 # Notes
 
-While it's pretty neat this lib can allow faster and less resource
+> Is a drop in replacement for `pandas.read_sql`?
+
+No. It varies in a few ways:
+- It will return a `dict` of `str` ➡ `numpy.ndarray` objects. But this 
+  can be passed with _zero_ copies to  `pandas.DataFrame`
+- If querying integer columns, if a null is encountered, the array will be 
+  converted to `dtype=object` and nulls from PostgreSQL will be `None`. 
+  Whereas pandas will convert the underlying array to a float type; where nulls
+  from postgres are basically `numpy.nan` types.
+- It lacks basically all of the options `pandas.read_sql` has.
+
+
+Furthermore, while it's pretty neat this lib can allow faster and less resource
 intensive use of numpy/pandas against PostgreSQL, it's in early 
 stages of development and you're likely to encounter some sharp edges
 which include, but not limited to:

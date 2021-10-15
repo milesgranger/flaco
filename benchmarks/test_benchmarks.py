@@ -86,7 +86,7 @@ def _table_setup(n_rows: int = 1_000_000):
     df["col5"] = df.col1.astype(str) + "-hello"
     df["col6"] = df.col5.astype(bytes)
     df.to_sql(table, index=False, con=engine, chunksize=10_000, if_exists="replace")
-    df = df[:2]
+    df = df[:20]
     df.loc[:, :] = None
     df.to_sql(table, index=False, con=engine, if_exists="append")
 
@@ -103,7 +103,6 @@ def memory_profile():
 
     engine = create_engine(DB_URI)
     _pandas_df1 = pd.read_sql(stmt, engine)
-
 
 if __name__ == "__main__":
     _table_setup(n_rows=500_000)

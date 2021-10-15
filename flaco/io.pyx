@@ -79,7 +79,7 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
 
             for i in range(0, n_columns):
                 data = lib.index_row(row_data_array_ptr, row_len, i)
-                insert_data_into_array(data, output[i], row_idx)
+                output[i] = insert_data_into_array(data, output[i], row_idx)
 
             lib.free_row(row_ptr)
             row_idx += one
@@ -133,7 +133,7 @@ cdef np.ndarray array_init(lib.Data data, int len):
     elif data.tag == lib.Data_Tag.Boolean:
         array = np.empty(shape=len, dtype=bool)
     elif data.tag == lib.Data_Tag.Bytes:
-        array = np.empty(shape=len, dtype=np.ndarray[np.uint8])
+        array = np.empty(shape=len, dtype=bytearray)
     elif data.tag == lib.Data_Tag.Decimal:
         array = np.empty(shape=len, dtype=np.float64)
     elif data.tag == lib.Data_Tag.Null:
@@ -143,7 +143,7 @@ cdef np.ndarray array_init(lib.Data data, int len):
     return array
 
 
-cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
+cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
     cdef np.ndarray[np.uint8_t, ndim=1] arr_bytes
     cdef np.npy_intp intp
 
@@ -184,12 +184,13 @@ cdef void insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         arr[idx] = data.decimal._0
 
     elif data.tag == lib.Data_Tag.Null:
+        if arr.dtype != object:
+            arr = arr.astype(object, copy=False)
         arr[idx] = None
 
     else:
         raise ValueError(f"Unsupported Data enum {data.tag}")
-
-
+    return arr
 
 cdef class Database:
 
