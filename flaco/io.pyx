@@ -17,17 +17,18 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     cdef bytes stmt_bytes = stmt.encode("utf-8")
     cdef np.int32_t _n_rows = n_rows
     cdef char *exc = NULL
-    cdef str err_msg
 
     cdef lib.RowIteratorPtr row_iterator = lib.read_sql(
         <char*>stmt_bytes, db.db_ptr, &exc
     )
     if exc != NULL:
-        err_msg = exc.decode()
-        raise FlacoException(err_msg)
+        raise FlacoException(exc.decode())
 
     # Read first row
-    cdef lib.RowPtr row_ptr = lib.next_row(row_iterator)
+    cdef lib.RowPtr row_ptr = lib.next_row(row_iterator, &exc)
+    if exc != NULL:
+        lib.free_row_iter(row_iterator)
+        raise FlacoException(exc.decode())
 
     if row_ptr == NULL:
         lib.free_row_iter(row_iterator)
@@ -99,7 +100,9 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
             lib.free_row(row_ptr)
             row_idx += one
 
-        row_ptr = lib.next_row(row_iterator)
+        row_ptr = lib.next_row(row_iterator, &exc)
+        if exc != NULL:
+            raise FlacoException(exc.decode())
 
     # Ensure arrays are correct size; only if n_rows not set
     if _n_rows == -1 and current_array_len != row_idx:

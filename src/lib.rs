@@ -191,11 +191,17 @@ pub extern "C" fn free_row_iter(ptr: RowIteratorPtr) {
 }
 
 #[no_mangle]
-pub extern "C" fn next_row(row_iter_ptr: RowIteratorPtr) -> RowPtr {
+pub extern "C" fn next_row(row_iter_ptr: RowIteratorPtr, exc: Exception) -> RowPtr {
     let mut row_iter = unsafe { Box::from_raw(row_iter_ptr as *mut RowIter) };
-    let ptr = match row_iter.next().unwrap() {
-        Some(row) => Box::into_raw(Box::new(row)) as RowPtr,
-        None => std::ptr::null_mut(),
+    let ptr = match row_iter.next() {
+        Ok(maybe_row) => match maybe_row {
+            Some(row) => Box::into_raw(Box::new(row)) as RowPtr,
+            None => std::ptr::null_mut(),
+        },
+        Err(err) => {
+            string_into_exception(err, exc);
+            std::ptr::null_mut()
+        }
     };
     mem::forget(row_iter);
     ptr

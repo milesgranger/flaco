@@ -92,7 +92,7 @@ cdef extern from "./flaco.h":
 
     np.uint32_t n_columns(RowPtr row_ptr)
 
-    RowPtr next_row(RowIteratorPtr row_iter_ptr)
+    RowPtr next_row(RowIteratorPtr row_iter_ptr, Exception exc)
     void free_row(RowPtr ptr);
 
     RowColumnNamesArrayPtr row_column_names(RowPtr row_ptr)

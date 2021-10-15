@@ -120,7 +120,7 @@ RowDataArrayPtr init_row_data_array(RowPtr row_ptr);
 
 uint32_t n_columns(RowPtr row_ptr);
 
-RowPtr next_row(RowIteratorPtr row_iter_ptr);
+RowPtr next_row(RowIteratorPtr row_iter_ptr, Exception exc);
 
 RowIteratorPtr read_sql(const char *stmt_ptr, DatabasePtr db_ptr, Exception exc);
 
