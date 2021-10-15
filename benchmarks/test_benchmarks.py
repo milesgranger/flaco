@@ -74,14 +74,22 @@ def test_incremental_size(benchmark, loader: str, n_rows: int):
             )
 
 
-def _table_setup(n_rows: int = 1_000_000, n_cols: int = 5):
+def _table_setup(n_rows: int = 1_000_000):
     table = "test_table"
     engine = create_engine(DB_URI)
 
-    data = np.random.randint(0, 100_000, size=n_rows * n_cols).astype(np.int32).reshape((-1, n_cols))
-    pd.DataFrame(data).to_sql(
-        table, index=False, con=engine, chunksize=10_000, if_exists="replace"
-    )
+    df = pd.DataFrame()
+    df["col1"] = np.random.randint(0, 1000, size=n_rows).astype(np.int32)
+    df["col2"] = df.col1.astype(np.uint32)
+    df["col3"] = df.col1.astype(np.float32)
+    df["col4"] = df.col1.astype(np.float64)
+    df["col5"] = df.col1.astype(str) + "-hello"
+    df["col6"] = df.col5.astype(bytes)
+    df.to_sql(table, index=False, con=engine, chunksize=10_000, if_exists="replace")
+    df = df[:2]
+    df.loc[:, :] = None
+    df.to_sql(table, index=False, con=engine, if_exists="append")
+
 
 
 @profile
@@ -97,7 +105,6 @@ def memory_profile():
     _pandas_df1 = pd.read_sql(stmt, engine)
 
 
-
-if __name__ == '__main__':
-    _table_setup(n_rows=1_000_000)
+if __name__ == "__main__":
+    _table_setup(n_rows=500_000)
     memory_profile()

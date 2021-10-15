@@ -212,7 +212,7 @@ pub extern "C" fn row_data(row_ptr: RowPtr, array_ptr: RowDataArrayPtr) {
                 let val: Option<f64> = row.get(i);
                 Data::Float64(val.unwrap_or_else(|| f64::NAN))
             }
-            "real" => {
+            "real" | "float4" => {
                 let val: Option<f32> = row.get(i);
                 Data::Float32(val.unwrap_or_else(|| f32::NAN))
             }

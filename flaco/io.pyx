@@ -3,9 +3,6 @@
 
 cimport numpy as np
 import numpy as np
-import array
-from cpython cimport array
-from cpython.object cimport PyObject
 from libc.stdlib cimport malloc
 from flaco cimport includes as lib
 
