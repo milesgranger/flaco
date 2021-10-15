@@ -84,7 +84,7 @@ def test_simple_group_by(postgresdb_engine, postgresdb_connection_uri, simple_ta
 
 def test_mixed_types_and_nulls(postgresdb_engine, postgresdb_connection_uri):
     table = "test_table"
-    n_rows = 10
+    n_rows = 5_000
     engine = postgresdb_engine
 
     df = pd.DataFrame()
@@ -103,5 +103,15 @@ def test_mixed_types_and_nulls(postgresdb_engine, postgresdb_connection_uri):
     with Database(postgresdb_connection_uri) as con:
         data = read_sql(f"select * from {table}", con)
 
-    # Last two rows should all be None
-    # TODO
+    # Last two rows should all be None, but nothing else
+    df = pd.DataFrame(data)
+    assert df.loc[len(df) - 2 :, :].isna().all().all()
+    assert not df.loc[: len(df) - 2, :].isna().all().all()
+
+    # int columns were converted to object dtype, but non-null vals are 'int'
+    assert isinstance(df.col1[0], int)
+    assert isinstance(df.col2[0], int)
+
+    # floats are still the same numpy type
+    assert isinstance(df.col3[0], np.float32)
+    assert isinstance(df.col4[0], np.float64)

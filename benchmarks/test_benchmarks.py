@@ -74,7 +74,7 @@ def test_incremental_size(benchmark, loader: str, n_rows: int):
             )
 
 
-def _table_setup(n_rows: int = 1_000_000):
+def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
     table = "test_table"
     engine = create_engine(DB_URI)
 
@@ -86,24 +86,27 @@ def _table_setup(n_rows: int = 1_000_000):
     df["col5"] = df.col1.astype(str) + "-hello"
     df["col6"] = df.col5.astype(bytes)
     df.to_sql(table, index=False, con=engine, chunksize=10_000, if_exists="replace")
-    df = df[:20]
-    df.loc[:, :] = None
-    df.to_sql(table, index=False, con=engine, if_exists="append")
 
+    if include_nulls:
+        df = df[:20]
+        df.loc[:, :] = None
+        df.to_sql(table, index=False, con=engine, if_exists="append")
 
 
 @profile
 def memory_profile():
     stmt = "select * from test_table"
 
-    # 200MB
+    # ~145MB
     with Database(DB_URI) as con:
         data1 = read_sql(stmt, con)
         _flaco_df1 = pd.DataFrame(data1, copy=False)
 
+    # ~260MB
     engine = create_engine(DB_URI)
     _pandas_df1 = pd.read_sql(stmt, engine)
 
+
 if __name__ == "__main__":
-    _table_setup(n_rows=500_000)
+    _table_setup(n_rows=500_000, include_nulls=True)
     memory_profile()
