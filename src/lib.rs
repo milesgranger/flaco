@@ -60,7 +60,7 @@ pub extern "C" fn db_create(uri_ptr: *const c_char) -> DatabasePtr {
 pub extern "C" fn read_sql(
     stmt_ptr: *const c_char,
     db_ptr: DatabasePtr,
-    mut exc: Exception,
+    exc: Exception,
 ) -> RowIteratorPtr {
     let mut db = unsafe { Box::from_raw(db_ptr as *mut Database) };
     let stmt_c = unsafe { ffi::CStr::from_ptr(stmt_ptr) };
@@ -73,7 +73,7 @@ pub extern "C" fn read_sql(
             }
             Err(e) => {
                 let msg = CString::new(e.to_string()).unwrap();
-                unsafe { *exc = msg.into_raw() as _};
+                unsafe { *exc = msg.into_raw() };
                 std::ptr::null_mut()
             }
         },
@@ -82,7 +82,7 @@ pub extern "C" fn read_sql(
                 "Not connected. Use 'with Database(...) as con', or call '.connect()'",
             )
             .unwrap();
-            unsafe { *exc = msg.into_raw() as _};
+            unsafe { *exc = msg.into_raw() };
             std::ptr::null_mut()
         }
     };

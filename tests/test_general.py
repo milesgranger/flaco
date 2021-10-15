@@ -3,7 +3,7 @@ import pytest
 import pandas as pd
 import numpy as np
 from sqlalchemy import create_engine
-from flaco.io import read_sql, Database
+from flaco.io import read_sql, Database, FlacoException
 
 
 @pytest.mark.parametrize(
@@ -119,7 +119,12 @@ def test_mixed_types_and_nulls(postgresdb_engine, postgresdb_connection_uri):
 
 def test_query_without_connect_error(postgresdb_connection_uri):
     db = Database(postgresdb_connection_uri)
-    with pytest.raises(ValueError):
+    with pytest.raises(FlacoException):
         read_sql("selec * from foo", db)
 
-    breakpoint()
+
+def test_query_error(postgresdb_connection_uri):
+    with Database(postgresdb_connection_uri) as db:
+        with pytest.raises(FlacoException):
+            read_sql("not a valid query", db)
+

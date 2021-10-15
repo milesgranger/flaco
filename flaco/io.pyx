@@ -25,7 +25,7 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     if exc != NULL:
         err_msg = exc.decode()
         free(exc)
-        raise ValueError(err_msg)
+        raise FlacoException(err_msg)
 
     # Read first row
     cdef lib.RowPtr row_ptr = lib.next_row(row_iterator)
@@ -228,3 +228,7 @@ cdef class Database:
     def __dealloc__(self):
         if &self.db_ptr != NULL:
             lib.drop(self.db_ptr)
+
+
+cdef class FlacoException(Exception):
+    pass
