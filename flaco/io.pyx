@@ -3,7 +3,7 @@
 
 cimport numpy as np
 import numpy as np
-from libc.stdlib cimport malloc
+from libc.stdlib cimport malloc, free
 from flaco cimport includes as lib
 
 
@@ -16,12 +16,19 @@ cdef extern from "numpy/arrayobject.h":
 cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     cdef bytes stmt_bytes = stmt.encode("utf-8")
     cdef np.int32_t _n_rows = n_rows
+    cdef char *exc = NULL
+
     cdef lib.RowIteratorPtr row_iterator = lib.read_sql(
-        <char*>stmt_bytes, db.db_ptr
+        <char*>stmt_bytes, db.db_ptr, &exc
     )
+    if exc != NULL:
+        raise FlacoException(exc.decode())
 
     # Read first row
-    cdef lib.RowPtr row_ptr = lib.next_row(row_iterator)
+    cdef lib.RowPtr row_ptr = lib.next_row(row_iterator, &exc)
+    if exc != NULL:
+        lib.free_row_iter(row_iterator)
+        raise FlacoException(exc.decode())
 
     if row_ptr == NULL:
         lib.free_row_iter(row_iterator)
@@ -58,7 +65,16 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
         else:
 
             # Get and insert new row
-            lib.row_data(row_ptr, row_data_array_ptr)
+            lib.row_data(row_ptr, row_data_array_ptr, &exc)
+
+            if exc != NULL:
+                if row_data_array_ptr != NULL:
+                    lib.free_row_data_array(row_data_array_ptr, row_len)
+                lib.free_row_iter(row_iterator)
+                lib.free_row_column_names(row_col_names)
+                err_msg = exc.decode()
+                raise FlacoException(err_msg)
+
             if row_data_array_ptr == NULL:
                 raise TypeError(f"Unable to pull row data, likely an unsupported type. Check stderr output.")
 
@@ -84,7 +100,9 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
             lib.free_row(row_ptr)
             row_idx += one
 
-        row_ptr = lib.next_row(row_iterator)
+        row_ptr = lib.next_row(row_iterator, &exc)
+        if exc != NULL:
+            raise FlacoException(exc.decode())
 
     # Ensure arrays are correct size; only if n_rows not set
     if _n_rows == -1 and current_array_len != row_idx:
@@ -94,7 +112,6 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     lib.free_row_data_array(row_data_array_ptr, row_len)
     lib.free_row_iter(row_iterator)
     lib.free_row_column_names(row_col_names)
-
     return {columns[i]: output[i] for i in range(columns.shape[0])}
 
 cdef int resize(np.ndarray arr, int len) except -1:
@@ -206,7 +223,10 @@ cdef class Database:
         self.db_ptr = lib.db_create(<char*>self.uri)
 
     cpdef connect(self):
-        lib.db_connect(self.db_ptr)
+        cdef char *exc = NULL
+        lib.db_connect(self.db_ptr, &exc)
+        if exc != NULL:
+            raise FlacoException(exc.decode())
 
     cpdef disconnect(self):
         lib.db_disconnect(self.db_ptr)
@@ -221,3 +241,7 @@ cdef class Database:
     def __dealloc__(self):
         if &self.db_ptr != NULL:
             lib.drop(self.db_ptr)
+
+
+cdef class FlacoException(Exception):
+    pass

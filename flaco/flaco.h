@@ -7,6 +7,8 @@
 
 typedef uint32_t *DatabasePtr;
 
+typedef char **Exception;
+
 typedef uint32_t *RowPtr;
 
 typedef char *const *RowColumnNamesArrayPtr;
@@ -96,7 +98,7 @@ typedef struct {
   };
 } Data;
 
-void db_connect(DatabasePtr ptr);
+void db_connect(DatabasePtr ptr, Exception exc);
 
 DatabasePtr db_create(const char *uri_ptr);
 
@@ -118,10 +120,10 @@ RowDataArrayPtr init_row_data_array(RowPtr row_ptr);
 
 uint32_t n_columns(RowPtr row_ptr);
 
-RowPtr next_row(RowIteratorPtr row_iter_ptr);
+RowPtr next_row(RowIteratorPtr row_iter_ptr, Exception exc);
 
-RowIteratorPtr read_sql(const char *stmt_ptr, DatabasePtr db_ptr);
+RowIteratorPtr read_sql(const char *stmt_ptr, DatabasePtr db_ptr, Exception exc);
 
 RowColumnNamesArrayPtr row_column_names(RowPtr row_ptr);
 
-void row_data(RowPtr row_ptr, RowDataArrayPtr array_ptr);
+void row_data(RowPtr row_ptr, RowDataArrayPtr array_ptr, Exception exc);

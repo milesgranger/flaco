@@ -3,8 +3,9 @@ use postgres as pg;
 use postgres::fallible_iterator::FallibleIterator;
 use postgres::RowIter;
 use rust_decimal::prelude::{Decimal, ToPrimitive};
+use std::ffi::CString;
 use std::net::IpAddr;
-use std::os::raw::{c_char};
+use std::os::raw::c_char;
 use std::{ffi, mem};
 use time;
 use time::format_description::well_known::Rfc3339;
@@ -14,6 +15,7 @@ type RowIteratorPtr = *mut u32;
 type RowPtr = *mut u32;
 type RowDataArrayPtr = *mut u32;
 type RowColumnNamesArrayPtr = *const *mut c_char;
+type Exception = *mut *mut c_char;
 
 /// Supports creating connections to a given connection URI
 pub struct Database {
@@ -33,9 +35,12 @@ impl Database {
         }
     }
 
-    pub fn connect(&mut self) {
+    pub fn connect(&mut self, exc: Exception) {
         if self.client.is_none() {
-            self.client = Some(pg::Client::connect(&self.uri, pg::NoTls).unwrap());
+            match pg::Client::connect(&self.uri, pg::NoTls) {
+                Ok(con) => self.client = Some(con),
+                Err(err) => string_into_exception(err, exc),
+            }
         }
     }
 
@@ -44,6 +49,12 @@ impl Database {
             self.client = None;
         }
     }
+}
+
+#[inline(always)]
+fn string_into_exception<S: ToString>(msg: S, exc: Exception) {
+    let msg = CString::new(msg.to_string()).unwrap();
+    unsafe { *exc = msg.into_raw() };
 }
 
 #[no_mangle]
@@ -55,20 +66,33 @@ pub extern "C" fn db_create(uri_ptr: *const c_char) -> DatabasePtr {
 }
 
 #[no_mangle]
-pub extern "C" fn read_sql(stmt_ptr: *const c_char, db_ptr: DatabasePtr) -> RowIteratorPtr {
+pub extern "C" fn read_sql(
+    stmt_ptr: *const c_char,
+    db_ptr: DatabasePtr,
+    exc: Exception,
+) -> RowIteratorPtr {
     let mut db = unsafe { Box::from_raw(db_ptr as *mut Database) };
     let stmt_c = unsafe { ffi::CStr::from_ptr(stmt_ptr) };
     let stmt = stmt_c.to_str().unwrap();
-    let row_iter = db
-        .client
-        .as_mut()
-        .expect("Not connected!")
-        .query_raw::<_, &i32, _>(stmt, &[])
-        .unwrap();
-    let boxed_row_iter = Box::new(row_iter);
-    let ptr = Box::into_raw(boxed_row_iter) as RowIteratorPtr;
+    let res = match db.client.as_mut() {
+        Some(con) => match con.query_raw::<_, &i32, _>(stmt, &[]) {
+            Ok(row_iter) => {
+                let boxed_row_iter = Box::new(row_iter);
+                Box::into_raw(boxed_row_iter) as RowIteratorPtr
+            }
+            Err(e) => {
+                string_into_exception(e, exc);
+                std::ptr::null_mut()
+            }
+        },
+        None => {
+            let msg = "Not connected. Use 'with Database(...) as con', or call '.connect()'";
+            string_into_exception(msg, exc);
+            std::ptr::null_mut()
+        }
+    };
     mem::forget(db);
-    ptr
+    res
 }
 
 #[no_mangle]
@@ -79,10 +103,10 @@ pub extern "C" fn db_disconnect(ptr: DatabasePtr) {
 }
 
 #[no_mangle]
-pub extern "C" fn db_connect(ptr: DatabasePtr) {
-    let mut conn = unsafe { Box::from_raw(ptr as *mut Database) };
-    conn.connect();
-    mem::forget(conn);
+pub extern "C" fn db_connect(ptr: DatabasePtr, exc: Exception) {
+    let mut db = unsafe { Box::from_raw(ptr as *mut Database) };
+    db.connect(exc);
+    mem::forget(db);
 }
 
 #[derive(Clone, Debug)]
@@ -97,7 +121,7 @@ pub struct BytesPtr {
 pub enum Data {
     Bytes(BytesPtr),
     Boolean(bool),
-    Decimal(f64),  // TODO: support lossless decimal/numeric type handling
+    Decimal(f64), // TODO: support lossless decimal/numeric type handling
     Int8(i8),
     Int16(i16),
     Int32(i32),
@@ -167,11 +191,17 @@ pub extern "C" fn free_row_iter(ptr: RowIteratorPtr) {
 }
 
 #[no_mangle]
-pub extern "C" fn next_row(row_iter_ptr: RowIteratorPtr) -> RowPtr {
+pub extern "C" fn next_row(row_iter_ptr: RowIteratorPtr, exc: Exception) -> RowPtr {
     let mut row_iter = unsafe { Box::from_raw(row_iter_ptr as *mut RowIter) };
-    let ptr = match row_iter.next().unwrap() {
-        Some(row) => Box::into_raw(Box::new(row)) as RowPtr,
-        None => std::ptr::null_mut(),
+    let ptr = match row_iter.next() {
+        Ok(maybe_row) => match maybe_row {
+            Some(row) => Box::into_raw(Box::new(row)) as RowPtr,
+            None => std::ptr::null_mut(),
+        },
+        Err(err) => {
+            string_into_exception(err, exc);
+            std::ptr::null_mut()
+        }
     };
     mem::forget(row_iter);
     ptr
@@ -193,7 +223,7 @@ pub extern "C" fn init_row_data_array(row_ptr: RowPtr) -> RowDataArrayPtr {
 }
 
 #[no_mangle]
-pub extern "C" fn row_data(row_ptr: RowPtr, array_ptr: RowDataArrayPtr) {
+pub extern "C" fn row_data(row_ptr: RowPtr, array_ptr: RowDataArrayPtr, exc: Exception) {
     let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row) };
     let mut values = unsafe { Vec::from_raw_parts(array_ptr as _, row.len(), row.len()) };
     for i in 0..values.len() {
@@ -284,7 +314,14 @@ pub extern "C" fn row_data(row_ptr: RowPtr, array_ptr: RowDataArrayPtr) {
                     None => Data::Null,
                 }
             }
-            _ => unimplemented!("Unimplemented conversion for type: '{}'", type_.name()),
+            _ => {
+                let msg = format!(
+                    "Unimplemented conversion for: '{}'; consider casting to text",
+                    type_.name()
+                );
+                string_into_exception(msg, exc);
+                Data::Null
+            }
         };
         values[i] = val;
     }
@@ -313,11 +350,7 @@ pub extern "C" fn row_column_names(row_ptr: RowPtr) -> RowColumnNamesArrayPtr {
         .iter()
         .map(|col| col.name())
         .map(|name| ffi::CString::new(name).unwrap())
-        .map(|name| {
-            let ptr = name.as_ptr();
-            mem::forget(name);
-            ptr
-        })
+        .map(|name| name.into_raw() as _)
         .collect::<Vec<*const c_char>>();
     mem::forget(row);
     let ptr = names.as_ptr();
@@ -336,18 +369,4 @@ pub extern "C" fn index_row(row_ptr: RowDataArrayPtr, len: u32, idx: u32) -> Dat
     let data = row[idx as usize].clone();
     mem::forget(row);
     data
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-    const CONNECTION_URI: &str = "postgresql://postgres:postgres@localhost:5432/postgres";
-
-    fn basic_query() {
-        let con = Database::new(CONNECTION_URI);
-        con.execute("create table if not exists foobar (col1 integer, col2 integer)");
-        let n_rows = con.execute("insert into foobar (col1, col2) values (1, 1)");
-        assert_eq!(n_rows, 1)
-    }
 }

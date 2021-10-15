@@ -3,7 +3,7 @@ import pytest
 import pandas as pd
 import numpy as np
 from sqlalchemy import create_engine
-from flaco.io import read_sql, Database
+from flaco.io import read_sql, Database, FlacoException
 
 
 @pytest.mark.parametrize(
@@ -15,7 +15,7 @@ from flaco.io import read_sql, Database
         "city",
         "country",
         "customer",
-        # "film",  # unsuppoted custom `mpaa_rating` TODO: support arbitrary types by serializing to string?
+        "film",  # unsupported custom `mpaa_rating` TODO: support arbitrary types by serializing to string?
         "film_actor",
         "film_category",
         "inventory",
@@ -33,7 +33,14 @@ def test_basic_select_all_tables(postgresdb_connection_uri, table):
     df1 = pd.read_sql_table(table, con=create_engine(postgresdb_connection_uri))
 
     with Database(postgresdb_connection_uri) as db:
-        data = read_sql(query, db)
+        if table == "film":
+            # there is a custom type called 'tsvector'; we should catch
+            # unimplemented type conversions.
+            with pytest.raises(FlacoException):
+                read_sql(query, db)
+            return
+        else:
+            data = read_sql(query, db)
     df2 = pd.DataFrame(data, copy=False)
 
     assert set(df1.columns) == set(df2.columns)
@@ -115,3 +122,21 @@ def test_mixed_types_and_nulls(postgresdb_engine, postgresdb_connection_uri):
     # floats are still the same numpy type
     assert isinstance(df.col3[0], np.float32)
     assert isinstance(df.col4[0], np.float64)
+
+
+def test_query_without_connect_error(postgresdb_connection_uri):
+    db = Database(postgresdb_connection_uri)
+    with pytest.raises(FlacoException):
+        read_sql("select * from payment", db)
+
+
+def test_query_error(postgresdb_connection_uri):
+    with Database(postgresdb_connection_uri) as db:
+        with pytest.raises(FlacoException):
+            read_sql("not a valid query", db)
+
+
+def test_bad_connection_error(postgresdb_connection_uri):
+    with pytest.raises(FlacoException):
+        with Database("bad-uri"):
+            pass
