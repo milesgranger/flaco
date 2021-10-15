@@ -220,7 +220,10 @@ cdef class Database:
         self.db_ptr = lib.db_create(<char*>self.uri)
 
     cpdef connect(self):
-        lib.db_connect(self.db_ptr)
+        cdef char *exc = NULL
+        lib.db_connect(self.db_ptr, &exc)
+        if exc != NULL:
+            raise FlacoException(exc.decode())
 
     cpdef disconnect(self):
         lib.db_disconnect(self.db_ptr)

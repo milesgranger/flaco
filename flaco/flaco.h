@@ -7,6 +7,8 @@
 
 typedef uint32_t *DatabasePtr;
 
+typedef char **Exception;
+
 typedef uint32_t *RowPtr;
 
 typedef char *const *RowColumnNamesArrayPtr;
@@ -96,9 +98,7 @@ typedef struct {
   };
 } Data;
 
-typedef char **Exception;
-
-void db_connect(DatabasePtr ptr);
+void db_connect(DatabasePtr ptr, Exception exc);
 
 DatabasePtr db_create(const char *uri_ptr);
 

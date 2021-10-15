@@ -135,3 +135,8 @@ def test_query_error(postgresdb_connection_uri):
         with pytest.raises(FlacoException):
             read_sql("not a valid query", db)
 
+
+def test_bad_connection_error(postgresdb_connection_uri):
+    with pytest.raises(FlacoException):
+        with Database("bad-uri"):
+            pass

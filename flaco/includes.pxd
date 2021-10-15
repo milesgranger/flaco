@@ -82,7 +82,7 @@ cdef extern from "./flaco.h":
     ctypedef np.uint32_t *RowDataArrayPtr
 
     DatabasePtr db_create(char *uri_ptr)
-    void db_connect(DatabasePtr ptr)
+    void db_connect(DatabasePtr ptr, Exception exc)
     void db_disconnect(DatabasePtr ptr)
 
     RowIteratorPtr read_sql(const char *stmt_ptr, DatabasePtr db_ptr, Exception exc)

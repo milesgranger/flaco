@@ -35,9 +35,12 @@ impl Database {
         }
     }
 
-    pub fn connect(&mut self) {
+    pub fn connect(&mut self, exc: Exception) {
         if self.client.is_none() {
-            self.client = Some(pg::Client::connect(&self.uri, pg::NoTls).unwrap());
+            match pg::Client::connect(&self.uri, pg::NoTls) {
+                Ok(con) => self.client = Some(con),
+                Err(err) => string_into_exception(err, exc),
+            }
         }
     }
 
@@ -100,10 +103,10 @@ pub extern "C" fn db_disconnect(ptr: DatabasePtr) {
 }
 
 #[no_mangle]
-pub extern "C" fn db_connect(ptr: DatabasePtr) {
-    let mut conn = unsafe { Box::from_raw(ptr as *mut Database) };
-    conn.connect();
-    mem::forget(conn);
+pub extern "C" fn db_connect(ptr: DatabasePtr, exc: Exception) {
+    let mut db = unsafe { Box::from_raw(ptr as *mut Database) };
+    db.connect(exc);
+    mem::forget(db);
 }
 
 #[derive(Clone, Debug)]
