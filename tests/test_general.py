@@ -115,3 +115,11 @@ def test_mixed_types_and_nulls(postgresdb_engine, postgresdb_connection_uri):
     # floats are still the same numpy type
     assert isinstance(df.col3[0], np.float32)
     assert isinstance(df.col4[0], np.float64)
+
+
+def test_query_without_connect_error(postgresdb_connection_uri):
+    db = Database(postgresdb_connection_uri)
+    with pytest.raises(ValueError):
+        read_sql("selec * from foo", db)
+
+    breakpoint()

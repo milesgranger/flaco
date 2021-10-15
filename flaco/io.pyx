@@ -3,7 +3,7 @@
 
 cimport numpy as np
 import numpy as np
-from libc.stdlib cimport malloc
+from libc.stdlib cimport malloc, free
 from flaco cimport includes as lib
 
 
@@ -16,9 +16,16 @@ cdef extern from "numpy/arrayobject.h":
 cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     cdef bytes stmt_bytes = stmt.encode("utf-8")
     cdef np.int32_t _n_rows = n_rows
+    cdef char *exc = <char*>malloc(sizeof(char))
+    cdef str err_msg
+
     cdef lib.RowIteratorPtr row_iterator = lib.read_sql(
-        <char*>stmt_bytes, db.db_ptr
+        <char*>stmt_bytes, db.db_ptr, &exc
     )
+    if exc != NULL:
+        err_msg = exc.decode()
+        free(exc)
+        raise ValueError(err_msg)
 
     # Read first row
     cdef lib.RowPtr row_ptr = lib.next_row(row_iterator)
