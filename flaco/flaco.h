@@ -108,11 +108,13 @@ void free_row(RowPtr ptr);
 
 void free_row_column_names(RowColumnNamesArrayPtr ptr);
 
-void free_row_data_array(RowDataArrayPtr ptr);
+void free_row_data_array(RowDataArrayPtr ptr, uint32_t len);
 
 void free_row_iter(RowIteratorPtr ptr);
 
-Data index_row(RowDataArrayPtr row_ptr, uint32_t idx);
+Data index_row(RowDataArrayPtr row_ptr, uint32_t len, uint32_t idx);
+
+RowDataArrayPtr init_row_data_array(RowPtr row_ptr);
 
 uint32_t n_columns(RowPtr row_ptr);
 
@@ -122,4 +124,4 @@ RowIteratorPtr read_sql(const char *stmt_ptr, DatabasePtr db_ptr);
 
 RowColumnNamesArrayPtr row_column_names(RowPtr row_ptr);
 
-RowDataArrayPtr row_data(RowPtr row_ptr);
+void row_data(RowPtr row_ptr, RowDataArrayPtr array_ptr);
