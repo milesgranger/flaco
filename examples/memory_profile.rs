@@ -22,7 +22,6 @@ fn main() {
         if row_iter.is_null() {
             break
         }
-
         n_rows += 1;
         for i in 0..n_columns {
             let _data_ptr: *mut Data = index_row(row_data_array_ptr, n_columns, i);
