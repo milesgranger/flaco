@@ -16,6 +16,8 @@ type RowDataArrayPtr = *mut u32;
 type RowColumnNamesArrayPtr = *mut *mut c_char;
 type Exception = *mut c_char;
 
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
 /// Supports creating connections to a given connection URI
 pub struct Database {
     client: Option<pg::Client>,
@@ -34,13 +36,12 @@ impl Database {
         }
     }
 
-    pub fn connect(&mut self, exc: &mut Exception) {
+    pub fn connect(&mut self) -> Result<()> {
         if self.client.is_none() {
-            match pg::Client::connect(&self.uri, pg::NoTls) {
-                Ok(con) => self.client = Some(con),
-                Err(err) => string_into_exception(err, exc),
-            }
+            let con = pg::Client::connect(&self.uri, pg::NoTls)?;
+            self.client = Some(con);
         }
+        Ok(())
     }
 
     pub fn disconnect(&mut self) {
@@ -104,7 +105,9 @@ pub extern "C" fn db_disconnect(ptr: DatabasePtr) {
 #[no_mangle]
 pub extern "C" fn db_connect(ptr: DatabasePtr, exc: &mut Exception) {
     let mut db = unsafe { Box::from_raw(ptr as *mut Database) };
-    db.connect(exc);
+    if let Err(err) = db.connect() {
+        string_into_exception(err, exc);
+    };
     mem::forget(db);
 }
 
@@ -246,10 +249,7 @@ pub fn init_row_data_array(row: &pg::Row) -> RowDataArrayPtr {
     ptr as _
 }
 
-fn row_data(
-    row: pg::Row,
-    array_ptr: &mut RowDataArrayPtr,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
     let mut values = unsafe { Vec::from_raw_parts(*array_ptr as _, row.len(), row.len()) };
     for i in 0..values.len() {
         let type_ = row.columns()[i].type_();
