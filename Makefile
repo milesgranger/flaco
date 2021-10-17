@@ -8,3 +8,10 @@ load-data:
 
 bench:
 	python -m pytest -v --benchmark-sort name --benchmark-only benchmarks
+
+memory-profile-rust:
+	cargo build --example memory_profile --release
+	chmod +x target/release/examples/memory_profile
+	mprof run ./target/release/examples/memory_profile
+	mprof plot
+

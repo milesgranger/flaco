@@ -251,8 +251,8 @@ pub fn init_row_data_array(row: &pg::Row) -> RowDataArrayPtr {
 
 fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
     let mut values = unsafe { Vec::from_raw_parts(*array_ptr as _, row.len(), row.len()) };
-    values.clear();  // clear any previous data in vec; this is key to low memory use
-    for i in 0..values.len() {
+    values.clear();
+    for i in 0..row.len() {
         let type_ = row.columns()[i].type_();
         // TODO: postgres-types: expose Inner enum which these variations
         // and have postgres Row.type/(or something) expose the variant
@@ -351,6 +351,7 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
         };
         values.push(val);
     }
+    //assert_eq!(values.len(), values.capacity());
     mem::forget(values);
     Ok(())
 }

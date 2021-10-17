@@ -7,7 +7,7 @@ fn main() {
 
     let mut db = Database::new("postgresql://postgres:postgres@localhost:5432/postgres");
     db.connect().unwrap();
-    let mut db_ptr = Box::into_raw(Box::new(db));
+    let db_ptr = Box::into_raw(Box::new(db));
     let mut row_iter = ptr::null_mut();
     let mut column_names = ptr::null_mut();
     let mut n_columns = 0;
