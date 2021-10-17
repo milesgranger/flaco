@@ -12,9 +12,8 @@ use time::format_description::well_known::Rfc3339;
 
 type DatabasePtr = *mut u32;
 type RowIteratorPtr = *mut u32;
-type RowPtr = *mut u32;
 type RowDataArrayPtr = *mut u32;
-type RowColumnNamesArrayPtr = *const *mut c_char;
+type RowColumnNamesArrayPtr = *mut *mut c_char;
 type Exception = *mut *mut c_char;
 
 /// Supports creating connections to a given connection URI
@@ -186,46 +185,60 @@ pub extern "C" fn drop(ptr: *mut u32) {
 }
 
 #[no_mangle]
-pub extern "C" fn free_row_iter(ptr: RowIteratorPtr) {
-    let _ = unsafe { Box::from_raw(ptr as *mut pg::RowIter) };
+pub extern "C" fn free_row_iter(ptr: &mut RowIteratorPtr) {
+    let _ = unsafe { Box::from_raw(*ptr as *mut pg::RowIter) };
+    *ptr = std::ptr::null_mut();
 }
 
 #[no_mangle]
-pub extern "C" fn next_row(row_iter_ptr: RowIteratorPtr, exc: Exception) -> RowPtr {
-    let mut row_iter = unsafe { Box::from_raw(row_iter_ptr as *mut RowIter) };
-    let ptr = match row_iter.next() {
+pub extern "C" fn next_row(
+    row_iter_ptr: &mut RowIteratorPtr,
+    row_data_array_ptr: &mut RowDataArrayPtr,
+    n_columns: &mut u32,
+    column_names: &mut RowColumnNamesArrayPtr,
+    exc: Exception,
+) {
+    let mut row_iter = unsafe { Box::from_raw(*row_iter_ptr as *mut RowIter) };
+    match row_iter.next() {
         Ok(maybe_row) => match maybe_row {
-            Some(row) => Box::into_raw(Box::new(row)) as RowPtr,
-            None => std::ptr::null_mut(),
+            Some(row) => {
+                if row_data_array_ptr.is_null() {
+                    *&mut*row_data_array_ptr = init_row_data_array(&row) as _;
+                }
+                if column_names.is_null() {
+                    *&mut*column_names = row_column_names(&row) as _;
+                    *n_columns = row.len() as _;
+                }
+                row_data(row, row_data_array_ptr, exc);
+            }
+            None => {
+                let len = *n_columns;
+                free_row_data_array(row_data_array_ptr, len);
+                free_row_column_names(column_names);
+                free_row_iter(row_iter_ptr);
+            },
         },
         Err(err) => {
             string_into_exception(err, exc);
-            std::ptr::null_mut()
+            let len = *n_columns;
+            free_row_data_array(row_data_array_ptr, len);
+            free_row_column_names(column_names);
+            free_row_iter(row_iter_ptr);
         }
     };
     mem::forget(row_iter);
-    ptr
-}
-#[no_mangle]
-pub extern "C" fn free_row(ptr: RowPtr) {
-    let _ = unsafe { Box::from_raw(ptr as *mut pg::Row) };
 }
 
-#[no_mangle]
-pub extern "C" fn init_row_data_array(row_ptr: RowPtr) -> RowDataArrayPtr {
-    let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row) };
+pub fn init_row_data_array(row: &pg::Row) -> RowDataArrayPtr {
     let len = row.len();
     let mut values = vec![Data::Null; len];
     let ptr = values.as_mut_ptr();
     mem::forget(values);
-    mem::forget(row);
     ptr as _
 }
 
-#[no_mangle]
-pub extern "C" fn row_data(row_ptr: RowPtr, array_ptr: RowDataArrayPtr, exc: Exception) {
-    let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row) };
-    let mut values = unsafe { Vec::from_raw_parts(array_ptr as _, row.len(), row.len()) };
+fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr, exc: Exception) {
+    let mut values = unsafe { Vec::from_raw_parts(*array_ptr as _, row.len(), row.len()) };
     for i in 0..values.len() {
         let type_ = row.columns()[i].type_();
         // TODO: postgres-types: expose Inner enum which these variations
@@ -325,26 +338,15 @@ pub extern "C" fn row_data(row_ptr: RowPtr, array_ptr: RowDataArrayPtr, exc: Exc
         };
         values[i] = val;
     }
-    mem::forget(row);
     mem::forget(values);
 }
 
-#[no_mangle]
-pub extern "C" fn free_row_data_array(ptr: RowDataArrayPtr, len: u32) {
-    let _: Vec<Data> = unsafe { Vec::from_raw_parts(ptr as _, len as usize, len as usize) };
+fn free_row_data_array(ptr: &mut RowDataArrayPtr, len: u32) {
+    let _: Vec<Data> = unsafe { Vec::from_raw_parts(*ptr as _, len as usize, len as usize) };
+    *&mut*ptr = std::ptr::null_mut() as RowDataArrayPtr as _;
 }
 
-#[no_mangle]
-pub extern "C" fn n_columns(row_ptr: RowPtr) -> u32 {
-    let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row) };
-    let len = row.len() as u32;
-    mem::forget(row);
-    len
-}
-
-#[no_mangle]
-pub extern "C" fn row_column_names(row_ptr: RowPtr) -> RowColumnNamesArrayPtr {
-    let row = unsafe { Box::from_raw(row_ptr as *mut pg::Row) };
+fn row_column_names(row: &pg::Row) -> RowColumnNamesArrayPtr {
     let names = row
         .columns()
         .iter()
@@ -352,20 +354,20 @@ pub extern "C" fn row_column_names(row_ptr: RowPtr) -> RowColumnNamesArrayPtr {
         .map(|name| ffi::CString::new(name).unwrap())
         .map(|name| name.into_raw() as _)
         .collect::<Vec<*const c_char>>();
-    mem::forget(row);
     let ptr = names.as_ptr();
     mem::forget(names);
     ptr as _
 }
 
-#[no_mangle]
-pub extern "C" fn free_row_column_names(ptr: RowColumnNamesArrayPtr) {
-    let _names = unsafe { Box::from_raw(ptr as *mut Vec<*const c_char>) };
+fn free_row_column_names(ptr: &mut RowColumnNamesArrayPtr) {
+    let _names = unsafe { Box::from_raw(*ptr as *mut Vec<*const c_char>) };
+    unsafe { *ptr.as_mut().unwrap() = std::ptr::null_mut() as _};
 }
 
 #[no_mangle]
-pub extern "C" fn index_row(row_ptr: RowDataArrayPtr, len: u32, idx: u32) -> Data {
-    let row: Vec<Data> = unsafe { Vec::from_raw_parts(row_ptr as _, len as usize, len as usize) };
+pub extern "C" fn index_row(row_data_array_ptr: RowDataArrayPtr, len: u32, idx: u32) -> Data {
+    let row: Vec<Data> =
+        unsafe { Vec::from_raw_parts(row_data_array_ptr as _, len as usize, len as usize) };
     let data = row[idx as usize].clone();
     mem::forget(row);
     data
