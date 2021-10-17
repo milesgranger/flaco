@@ -20,7 +20,7 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     cdef lib.RowDataArrayPtr row_data_array_ptr = NULL
     cdef lib.RowColumnNamesArrayPtr column_names = NULL
     cdef np.uint32_t n_columns = 0
-    cdef char *exc = NULL
+    cdef lib.Exception exc = NULL
 
     cdef lib.RowIteratorPtr row_iterator = lib.read_sql(
         <char*>stmt_bytes, db.db_ptr, &exc
@@ -196,7 +196,7 @@ cdef class Database:
         self.db_ptr = lib.db_create(<char*>self.uri)
 
     cpdef connect(self):
-        cdef char *exc = NULL
+        cdef lib.Exception exc = NULL
         lib.db_connect(self.db_ptr, &exc)
         if exc != NULL:
             raise FlacoException(exc.decode())

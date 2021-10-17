@@ -14,7 +14,7 @@ type DatabasePtr = *mut u32;
 type RowIteratorPtr = *mut u32;
 type RowDataArrayPtr = *mut u32;
 type RowColumnNamesArrayPtr = *mut *mut c_char;
-type Exception = *mut *mut c_char;
+type Exception = *mut c_char;
 
 /// Supports creating connections to a given connection URI
 pub struct Database {
@@ -34,7 +34,7 @@ impl Database {
         }
     }
 
-    pub fn connect(&mut self, exc: Exception) {
+    pub fn connect(&mut self, exc: &mut Exception) {
         if self.client.is_none() {
             match pg::Client::connect(&self.uri, pg::NoTls) {
                 Ok(con) => self.client = Some(con),
@@ -51,9 +51,9 @@ impl Database {
 }
 
 #[inline(always)]
-fn string_into_exception<S: ToString>(msg: S, exc: Exception) {
+fn string_into_exception<S: ToString>(msg: S, exc: &mut Exception) {
     let msg = CString::new(msg.to_string()).unwrap();
-    unsafe { *exc = msg.into_raw() };
+    *&mut *exc = msg.into_raw();
 }
 
 #[no_mangle]
@@ -68,7 +68,7 @@ pub extern "C" fn db_create(uri_ptr: *const c_char) -> DatabasePtr {
 pub extern "C" fn read_sql(
     stmt_ptr: *const c_char,
     db_ptr: DatabasePtr,
-    exc: Exception,
+    exc: &mut Exception,
 ) -> RowIteratorPtr {
     let mut db = unsafe { Box::from_raw(db_ptr as *mut Database) };
     let stmt_c = unsafe { ffi::CStr::from_ptr(stmt_ptr) };
@@ -102,7 +102,7 @@ pub extern "C" fn db_disconnect(ptr: DatabasePtr) {
 }
 
 #[no_mangle]
-pub extern "C" fn db_connect(ptr: DatabasePtr, exc: Exception) {
+pub extern "C" fn db_connect(ptr: DatabasePtr, exc: &mut Exception) {
     let mut db = unsafe { Box::from_raw(ptr as *mut Database) };
     db.connect(exc);
     mem::forget(db);
@@ -196,7 +196,7 @@ pub extern "C" fn next_row(
     row_data_array_ptr: &mut RowDataArrayPtr,
     n_columns: &mut u32,
     column_names: &mut RowColumnNamesArrayPtr,
-    exc: Exception,
+    exc: &mut Exception,
 ) {
     let mut row_iter = unsafe { Box::from_raw(*row_iter_ptr as *mut RowIter) };
     match row_iter.next() {
@@ -209,7 +209,13 @@ pub extern "C" fn next_row(
                     *&mut *column_names = row_column_names(&row) as _;
                     *n_columns = row.len() as _;
                 }
-                row_data(row, row_data_array_ptr, exc);
+                if let Err(err) = row_data(row, row_data_array_ptr) {
+                    string_into_exception(err, exc);
+                    let len = *n_columns;
+                    free_row_data_array(row_data_array_ptr, len);
+                    free_row_column_names(column_names, len as usize);
+                    free_row_iter(row_iter_ptr);
+                };
             }
             None => {
                 let len = *n_columns;
@@ -241,7 +247,10 @@ pub fn init_row_data_array(row: &pg::Row) -> RowDataArrayPtr {
     ptr as _
 }
 
-fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr, exc: Exception) {
+fn row_data(
+    row: pg::Row,
+    array_ptr: &mut RowDataArrayPtr,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut values = unsafe { Vec::from_raw_parts(*array_ptr as _, row.len(), row.len()) };
     for i in 0..values.len() {
         let type_ = row.columns()[i].type_();
@@ -336,13 +345,14 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr, exc: Exception) {
                     "Unimplemented conversion for: '{}'; consider casting to text",
                     type_.name()
                 );
-                string_into_exception(msg, exc);
-                Data::Null
+                mem::forget(values);
+                return Err(msg.into());
             }
         };
         values[i] = val;
     }
     mem::forget(values);
+    Ok(())
 }
 
 fn free_row_data_array(ptr: &mut RowDataArrayPtr, len: u32) {
