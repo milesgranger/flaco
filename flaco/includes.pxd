@@ -86,7 +86,7 @@ cdef extern from "./flaco.h":
 
     RowIteratorPtr read_sql(const char *stmt_ptr, DatabasePtr db_ptr, Exception *exc)
 
-    void drop(DatabasePtr ptr)
+    void free_db(DatabasePtr ptr)
 
     void next_row(
             RowIteratorPtr *row_iter_ptr,

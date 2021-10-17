@@ -9,8 +9,6 @@ typedef uint32_t *DatabasePtr;
 
 typedef char *Exception;
 
-typedef uint32_t *RowIteratorPtr;
-
 typedef struct {
   uint8_t *ptr;
   uint32_t len;
@@ -94,6 +92,8 @@ typedef struct {
 
 typedef uint32_t *RowDataArrayPtr;
 
+typedef uint32_t *RowIteratorPtr;
+
 typedef char **RowColumnNamesArrayPtr;
 
 void db_connect(DatabasePtr ptr, Exception *exc);
@@ -102,9 +102,7 @@ DatabasePtr db_create(const char *uri_ptr);
 
 void db_disconnect(DatabasePtr ptr);
 
-void drop(uint32_t *ptr);
-
-void free_row_iter(RowIteratorPtr *ptr);
+void free_db(DatabasePtr ptr);
 
 Data *index_row(RowDataArrayPtr row_data_array_ptr, uint32_t len, uint32_t idx);
 

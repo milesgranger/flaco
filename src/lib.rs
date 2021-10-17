@@ -180,12 +180,11 @@ impl From<Option<String>> for Data {
 }
 
 #[no_mangle]
-pub extern "C" fn drop(ptr: *mut u32) {
-    unsafe { Box::from_raw(ptr) };
+pub extern "C" fn free_db(ptr: DatabasePtr) {
+    unsafe { Box::from_raw(ptr as DatabasePtr) };
 }
 
-#[no_mangle]
-pub extern "C" fn free_row_iter(ptr: &mut RowIteratorPtr) {
+fn free_row_iter(ptr: &mut RowIteratorPtr) {
     let _ = unsafe { Box::from_raw(*ptr as *mut pg::RowIter) };
     *ptr = std::ptr::null_mut();
 }

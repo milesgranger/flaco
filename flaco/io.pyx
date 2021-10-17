@@ -3,7 +3,7 @@
 
 cimport numpy as np
 import numpy as np
-from libc.stdlib cimport malloc, free
+from libc.stdlib cimport malloc
 from cython.operator cimport dereference as deref
 from flaco cimport includes as lib
 
@@ -213,7 +213,7 @@ cdef class Database:
 
     def __dealloc__(self):
         if &self.db_ptr != NULL:
-            lib.drop(self.db_ptr)
+            lib.free_db(self.db_ptr)
 
 
 cdef class FlacoException(Exception):
