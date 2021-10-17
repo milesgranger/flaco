@@ -4,6 +4,7 @@
 cimport numpy as np
 import numpy as np
 from libc.stdlib cimport malloc, free
+from cython.operator cimport dereference as deref
 from flaco cimport includes as lib
 
 
@@ -48,7 +49,7 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     cdef np.uint32_t n_increment = 1_000
     cdef np.uint32_t current_array_len = 0
     cdef lib.RowDataArrayPtr row_data_ptr
-    cdef lib.Data data
+    cdef lib.Data *data
     while True:
         if row_iterator == NULL:
             break
@@ -60,7 +61,7 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
                 for i in range(0, n_columns):
                     data = lib.index_row(row_data_array_ptr, n_columns, i)
                     output.append(
-                        array_init(data, n_increment if n_rows == -1 else n_rows)
+                        array_init(deref(data), n_increment if n_rows == -1 else n_rows)
                     )
 
             # grow arrays if next insert is passed current len
@@ -71,7 +72,7 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
 
             for i in range(0, n_columns):
                 data = lib.index_row(row_data_array_ptr, n_columns, i)
-                output[i] = insert_data_into_array(data, output[i], row_idx)
+                output[i] = insert_data_into_array(deref(data), output[i], row_idx)
 
             row_idx += one
 

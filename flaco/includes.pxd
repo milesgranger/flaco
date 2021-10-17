@@ -96,4 +96,4 @@ cdef extern from "./flaco.h":
             Exception exc
     )
 
-    Data index_row(RowDataArrayPtr row_ptr, np.uint32_t len, np.uint32_t idx)
+    Data *index_row(RowDataArrayPtr row_ptr, np.uint32_t len, np.uint32_t idx)

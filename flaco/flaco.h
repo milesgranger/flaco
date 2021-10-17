@@ -106,7 +106,7 @@ void drop(uint32_t *ptr);
 
 void free_row_iter(RowIteratorPtr *ptr);
 
-Data index_row(RowDataArrayPtr row_data_array_ptr, uint32_t len, uint32_t idx);
+Data *index_row(RowDataArrayPtr row_data_array_ptr, uint32_t len, uint32_t idx);
 
 void next_row(RowIteratorPtr *row_iter_ptr,
               RowDataArrayPtr *row_data_array_ptr,
