@@ -214,7 +214,7 @@ pub extern "C" fn next_row(
             None => {
                 let len = *n_columns;
                 free_row_data_array(row_data_array_ptr, len);
-                free_row_column_names(column_names);
+                free_row_column_names(column_names, len as usize);
                 free_row_iter(row_iter_ptr);
             }
         },
@@ -222,7 +222,7 @@ pub extern "C" fn next_row(
             string_into_exception(err, exc);
             let len = *n_columns;
             free_row_data_array(row_data_array_ptr, len);
-            free_row_column_names(column_names);
+            free_row_column_names(column_names, len as usize);
             free_row_iter(row_iter_ptr);
         }
     };
@@ -351,21 +351,22 @@ fn free_row_data_array(ptr: &mut RowDataArrayPtr, len: u32) {
 }
 
 fn row_column_names(row: &pg::Row) -> RowColumnNamesArrayPtr {
-    let names = row
+    let mut names = row
         .columns()
         .iter()
         .map(|col| col.name())
         .map(|name| ffi::CString::new(name).unwrap())
         .map(|name| name.into_raw() as _)
         .collect::<Vec<*const c_char>>();
+    names.shrink_to_fit();
     let ptr = names.as_ptr();
     mem::forget(names);
     ptr as _
 }
 
-fn free_row_column_names(ptr: &mut RowColumnNamesArrayPtr) {
-    let _names = unsafe { Box::from_raw(*ptr as *mut Vec<*const c_char>) };
-    unsafe { *ptr.as_mut().unwrap() = std::ptr::null_mut() as _ };
+fn free_row_column_names(ptr: &mut RowColumnNamesArrayPtr, len: usize) {
+    let _names = unsafe { Vec::from_raw_parts(*ptr, len, len) };
+    *ptr = std::ptr::null_mut();
 }
 
 #[no_mangle]
