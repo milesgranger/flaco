@@ -15,3 +15,5 @@ memory-profile-rust:
 	mprof run ./target/release/examples/memory_profile
 	mprof plot
 
+memory-profile-python:
+	python -m memory_profiler benchmarks/test_benchmarks.py
