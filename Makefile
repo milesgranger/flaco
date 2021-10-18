@@ -17,3 +17,8 @@ memory-profile-rust:
 
 memory-profile-python:
 	python -m memory_profiler benchmarks/test_benchmarks.py
+
+heaptrack:
+	cargo build --example memory_profile --release
+	chmod +x target/release/examples/memory_profile
+	heaptrack ./target/release/examples/memory_profile

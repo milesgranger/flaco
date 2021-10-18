@@ -1,10 +1,8 @@
 use flaco::*;
-use std::ptr;
 use std::ffi::CString;
-
+use std::ptr;
 
 fn main() {
-
     let mut db = Database::new("postgresql://postgres:postgres@localhost:5432/postgres");
     db.connect().unwrap();
     let db_ptr = Box::into_raw(Box::new(db));
@@ -17,9 +15,15 @@ fn main() {
     let mut row_iter = read_sql(stmt, db_ptr as _, &mut exc);
     let mut n_rows = 0;
     loop {
-        let _: () = next_row(&mut row_iter, &mut row_data_array_ptr, &mut n_columns, &mut column_names, &mut exc);
+        let _: () = next_row(
+            &mut row_iter,
+            &mut row_data_array_ptr,
+            &mut n_columns,
+            &mut column_names,
+            &mut exc,
+        );
         if row_iter.is_null() {
-            break
+            break;
         }
         n_rows += 1;
         for i in 0..n_columns {
@@ -32,5 +36,4 @@ fn main() {
         ptr::drop_in_place(stmt);
         ptr::drop_in_place(db_ptr);
     }
-
 }
