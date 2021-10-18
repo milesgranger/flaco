@@ -7,15 +7,7 @@
 
 typedef uint32_t *DatabasePtr;
 
-typedef char **Exception;
-
-typedef uint32_t *RowPtr;
-
-typedef char *const *RowColumnNamesArrayPtr;
-
-typedef uint32_t *RowDataArrayPtr;
-
-typedef uint32_t *RowIteratorPtr;
+typedef char *Exception;
 
 typedef struct {
   uint8_t *ptr;
@@ -98,32 +90,26 @@ typedef struct {
   };
 } Data;
 
-void db_connect(DatabasePtr ptr, Exception exc);
+typedef uint32_t *RowDataArrayPtr;
+
+typedef uint32_t *RowIteratorPtr;
+
+typedef char **RowColumnNamesArrayPtr;
+
+void db_connect(DatabasePtr ptr, Exception *exc);
 
 DatabasePtr db_create(const char *uri_ptr);
 
 void db_disconnect(DatabasePtr ptr);
 
-void drop(uint32_t *ptr);
+void free_db(DatabasePtr ptr);
 
-void free_row(RowPtr ptr);
+Data *index_row(RowDataArrayPtr row_data_array_ptr, uint32_t len, uint32_t idx);
 
-void free_row_column_names(RowColumnNamesArrayPtr ptr);
+void next_row(RowIteratorPtr *row_iter_ptr,
+              RowDataArrayPtr *row_data_array_ptr,
+              uint32_t *n_columns,
+              RowColumnNamesArrayPtr *column_names,
+              Exception *exc);
 
-void free_row_data_array(RowDataArrayPtr ptr, uint32_t len);
-
-void free_row_iter(RowIteratorPtr ptr);
-
-Data index_row(RowDataArrayPtr row_ptr, uint32_t len, uint32_t idx);
-
-RowDataArrayPtr init_row_data_array(RowPtr row_ptr);
-
-uint32_t n_columns(RowPtr row_ptr);
-
-RowPtr next_row(RowIteratorPtr row_iter_ptr, Exception exc);
-
-RowIteratorPtr read_sql(const char *stmt_ptr, DatabasePtr db_ptr, Exception exc);
-
-RowColumnNamesArrayPtr row_column_names(RowPtr row_ptr);
-
-void row_data(RowPtr row_ptr, RowDataArrayPtr array_ptr, Exception exc);
+RowIteratorPtr read_sql(const char *stmt_ptr, DatabasePtr db_ptr, Exception *exc);

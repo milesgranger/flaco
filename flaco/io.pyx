@@ -1,9 +1,10 @@
 # distutils: language=c
-# cython: language_level=3
+# cython: language_level=3, boundscheck=False
 
 cimport numpy as np
 import numpy as np
-from libc.stdlib cimport malloc, free
+from libc.stdlib cimport malloc
+from cython.operator cimport dereference as deref
 from flaco cimport includes as lib
 
 
@@ -16,7 +17,10 @@ cdef extern from "numpy/arrayobject.h":
 cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     cdef bytes stmt_bytes = stmt.encode("utf-8")
     cdef np.int32_t _n_rows = n_rows
-    cdef char *exc = NULL
+    cdef lib.RowDataArrayPtr row_data_array_ptr = NULL
+    cdef lib.RowColumnNamesArrayPtr column_names = NULL
+    cdef np.uint32_t n_columns = 0
+    cdef lib.Exception exc = NULL
 
     cdef lib.RowIteratorPtr row_iterator = lib.read_sql(
         <char*>stmt_bytes, db.db_ptr, &exc
@@ -25,27 +29,15 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
         raise FlacoException(exc.decode())
 
     # Read first row
-    cdef lib.RowPtr row_ptr = lib.next_row(row_iterator, &exc)
+    lib.next_row(&row_iterator, &row_data_array_ptr, &n_columns, &column_names, &exc)
     if exc != NULL:
-        lib.free_row_iter(row_iterator)
         raise FlacoException(exc.decode())
-
-    if row_ptr == NULL:
-        lib.free_row_iter(row_iterator)
-        return dict()  # query returned no rows
-
-    cdef lib.RowDataArrayPtr row_data_array_ptr = lib.init_row_data_array(row_ptr)
-
-    # get column names and row len
-    cdef lib.RowColumnNamesArrayPtr row_col_names = lib.row_column_names(row_ptr)
-    cdef np.uint32_t n_columns = lib.n_columns(row_ptr)
 
     # build columns
     cdef np.ndarray columns = np.zeros(shape=n_columns, dtype=object)
-
     cdef np.uint32_t i
     for i in range(0, n_columns):
-        columns[i] = row_col_names[i].decode()
+        columns[i] = column_names[i].decode()
 
     # np.ndarray would force all internal arrays to be object dtypes
     # b/c each array has a different dtype.
@@ -57,34 +49,19 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     cdef np.uint32_t n_increment = 1_000
     cdef np.uint32_t current_array_len = 0
     cdef lib.RowDataArrayPtr row_data_ptr
-    cdef lib.Data data
-    cdef np.uint32_t row_len = columns.shape[0]
+    cdef lib.Data *data
     while True:
-        if row_ptr == NULL:
+        if row_iterator == NULL:
             break
         else:
-
-            # Get and insert new row
-            lib.row_data(row_ptr, row_data_array_ptr, &exc)
-
-            if exc != NULL:
-                if row_data_array_ptr != NULL:
-                    lib.free_row_data_array(row_data_array_ptr, row_len)
-                lib.free_row_iter(row_iterator)
-                lib.free_row_column_names(row_col_names)
-                err_msg = exc.decode()
-                raise FlacoException(err_msg)
-
-            if row_data_array_ptr == NULL:
-                raise TypeError(f"Unable to pull row data, likely an unsupported type. Check stderr output.")
 
             if row_idx == 0:
                 # Initialize arrays for output
                 # will resize at `n_increment` if `n_rows` is not set.
                 for i in range(0, n_columns):
-                    data = lib.index_row(row_data_array_ptr, row_len, i)
+                    data = lib.index_row(row_data_array_ptr, n_columns, i)
                     output.append(
-                        array_init(data, n_increment if n_rows == -1 else n_rows)
+                        array_init(deref(data), n_increment if n_rows == -1 else n_rows)
                     )
 
             # grow arrays if next insert is passed current len
@@ -94,24 +71,20 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
                     current_array_len += n_increment
 
             for i in range(0, n_columns):
-                data = lib.index_row(row_data_array_ptr, row_len, i)
-                output[i] = insert_data_into_array(data, output[i], row_idx)
+                data = lib.index_row(row_data_array_ptr, n_columns, i)
+                output[i] = insert_data_into_array(deref(data), output[i], row_idx)
 
-            lib.free_row(row_ptr)
             row_idx += one
 
-        row_ptr = lib.next_row(row_iterator, &exc)
-        if exc != NULL:
-            raise FlacoException(exc.decode())
+            lib.next_row(&row_iterator, &row_data_array_ptr, &n_columns, &column_names, &exc)
+            if exc != NULL:
+                raise FlacoException(exc.decode())
 
     # Ensure arrays are correct size; only if n_rows not set
     if _n_rows == -1 and current_array_len != row_idx:
         for i in range(0, n_columns):
             resize(output[i], row_idx)
 
-    lib.free_row_data_array(row_data_array_ptr, row_len)
-    lib.free_row_iter(row_iterator)
-    lib.free_row_column_names(row_col_names)
     return {columns[i]: output[i] for i in range(columns.shape[0])}
 
 cdef int resize(np.ndarray arr, int len) except -1:
@@ -223,7 +196,7 @@ cdef class Database:
         self.db_ptr = lib.db_create(<char*>self.uri)
 
     cpdef connect(self):
-        cdef char *exc = NULL
+        cdef lib.Exception exc = NULL
         lib.db_connect(self.db_ptr, &exc)
         if exc != NULL:
             raise FlacoException(exc.decode())
@@ -240,7 +213,7 @@ cdef class Database:
 
     def __dealloc__(self):
         if &self.db_ptr != NULL:
-            lib.drop(self.db_ptr)
+            lib.free_db(self.db_ptr)
 
 
 cdef class FlacoException(Exception):

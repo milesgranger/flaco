@@ -2,6 +2,7 @@
 flaco/*.so
 flaco/*.c
 *.html
+*.dat
 
 .idea/
 __pycache__/

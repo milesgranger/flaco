@@ -25,7 +25,7 @@ cdef extern from "./flaco.h":
         String
         Null
 
-    ctypedef char **Exception;
+    ctypedef char *Exception;
 
     ctypedef struct Bytes_Body:
         BytesPtr _0
@@ -77,30 +77,23 @@ cdef extern from "./flaco.h":
 
     ctypedef np.uint32_t *DatabasePtr
     ctypedef np.uint32_t *RowIteratorPtr
-    ctypedef np.uint32_t *RowPtr
     ctypedef char **RowColumnNamesArrayPtr
     ctypedef np.uint32_t *RowDataArrayPtr
 
     DatabasePtr db_create(char *uri_ptr)
-    void db_connect(DatabasePtr ptr, Exception exc)
+    void db_connect(DatabasePtr ptr, Exception *exc)
     void db_disconnect(DatabasePtr ptr)
 
-    RowIteratorPtr read_sql(const char *stmt_ptr, DatabasePtr db_ptr, Exception exc)
-    void free_row_iter(RowIteratorPtr ptr);
+    RowIteratorPtr read_sql(const char *stmt_ptr, DatabasePtr db_ptr, Exception *exc)
 
-    void drop(DatabasePtr ptr)
+    void free_db(DatabasePtr ptr)
 
-    np.uint32_t n_columns(RowPtr row_ptr)
+    void next_row(
+            RowIteratorPtr *row_iter_ptr,
+            RowDataArrayPtr *row_ptr,
+            np.uint32_t *n_columns,
+            RowColumnNamesArrayPtr *column_names,
+            Exception *exc
+    )
 
-    RowPtr next_row(RowIteratorPtr row_iter_ptr, Exception exc)
-    void free_row(RowPtr ptr);
-
-    RowColumnNamesArrayPtr row_column_names(RowPtr row_ptr)
-    void free_row_column_names(RowColumnNamesArrayPtr ptr)
-
-    RowDataArrayPtr init_row_data_array(RowPtr row_ptr)
-
-    void row_data(RowPtr row_ptr, RowDataArrayPtr array_ptr, Exception exc)
-    void free_row_data_array(RowDataArrayPtr ptr, np.uint32_t len)
-
-    Data index_row(RowPtr row_ptr, np.uint32_t len, np.uint32_t idx)
+    Data *index_row(RowDataArrayPtr row_ptr, np.uint32_t len, np.uint32_t idx)
