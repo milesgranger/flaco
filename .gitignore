@@ -3,7 +3,7 @@ flaco/*.so
 flaco/*.c
 *.html
 *.dat
-
+heaptrack.*
 .idea/
 __pycache__/
 
