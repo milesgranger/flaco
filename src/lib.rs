@@ -188,9 +188,6 @@ impl Drop for Data {
             Data::String(ptr) => {
                 let _ = unsafe { CString::from_raw(*ptr as _) };
             }
-            Data::Bytes(ptr) => {
-                let _ = unsafe { Vec::from_raw_parts(ptr.ptr, ptr.len as usize, ptr.len as usize) };
-            }
             _ => (),
         }
     }
