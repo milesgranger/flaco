@@ -158,7 +158,8 @@ simple_from!(i64, Int64);
 impl From<Option<Vec<u8>>> for Data {
     fn from(val: Option<Vec<u8>>) -> Self {
         match val {
-            Some(v) => {
+            Some(mut v) => {
+                v.shrink_to_fit();
                 let ptr = v.as_ptr() as _;
                 let len = v.len() as u32;
                 mem::forget(v);
@@ -173,11 +174,21 @@ impl From<Option<String>> for Data {
         match val {
             Some(string) => {
                 let cstring = ffi::CString::new(string).unwrap();
-                let ptr = cstring.as_ptr();
-                mem::forget(cstring);
-                Data::String(ptr)
+                Data::String(cstring.into_raw())
             }
             None => Data::Null,
+        }
+    }
+}
+
+// special drop for any variants containing pointers
+impl Drop for Data {
+    fn drop(&mut self) {
+        match self {
+            Data::String(ptr) => {
+                let _ = unsafe { CString::from_raw(*ptr as _) };
+            }
+            _ => (),
         }
     }
 }
@@ -251,7 +262,8 @@ pub fn init_row_data_array(row: &pg::Row) -> RowDataArrayPtr {
 
 fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
     let mut values = unsafe { Vec::from_raw_parts(*array_ptr as _, row.len(), row.len()) };
-    values.clear();
+    assert_eq!(values.len(), values.capacity());
+    assert_eq!(values.len(), row.len());
     for i in 0..row.len() {
         let type_ = row.columns()[i].type_();
         // TODO: postgres-types: expose Inner enum which these variations
@@ -349,7 +361,7 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
                 return Err(msg.into());
             }
         };
-        values.push(val);
+        values[i] = val;
     }
     //assert_eq!(values.len(), values.capacity());
     mem::forget(values);
