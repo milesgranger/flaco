@@ -28,5 +28,9 @@ fn main() {
     }
 
     println!("Read {} rows!", n_rows);
+    unsafe {
+        ptr::drop_in_place(stmt);
+        ptr::drop_in_place(db_ptr);
+    }
 
 }
