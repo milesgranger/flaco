@@ -108,5 +108,5 @@ def memory_profile():
 
 
 if __name__ == "__main__":
-    _table_setup(n_rows=500_000, include_nulls=True)
+    _table_setup(n_rows=2_000_000, include_nulls=False)
     memory_profile()
