@@ -264,21 +264,28 @@ impl UpdateInPlace for Option<Vec<u8>> {
 }
 impl UpdateInPlace for Option<String> {
     fn update_in_place(self, data: &mut Data) -> Result<()> {
-        match self {
-            Some(ref string) => match data {
-                Data::String(ptr) => {
-                    let mut new_ptr = CString::new(string).unwrap().into_raw() as _;
-                    mem::swap(ptr, &mut new_ptr);
-                    let _ = unsafe { CString::from_raw(new_ptr as _) };  // now points to old data; need to drop
-                }
-                Data::Null => mem::swap(data, &mut (self.into())),
-                _ => return Err("Data type mismatch!".into()),
-            },
-            None => {
-                if let Data::String(_) = data {
-                    mem::swap(data, &mut Data::Null);
+        match data {
+            Data::String(ptr) => {
+                match self {
+                    Some(string) => {
+                        let mut new_ptr = CString::new(string).unwrap().into_raw() as _;
+                        mem::swap(ptr, &mut new_ptr);
+                        let _ = unsafe { CString::from_raw(new_ptr as _) }; // now points to old data; need to drop
+                    }
+                    None => {
+                        if let Data::String(_) = data {
+                            mem::swap(data, &mut Data::Null);
+                        }
+                    }
                 }
             }
+            Data::Null => {
+                // new allocation if previous iter was Null and now we have data
+                if self.is_some() {
+                    mem::swap(data, &mut (self.into()))
+                }
+            }
+            _ => return Err("Data type mismatch!".into()),
         }
         Ok(())
     }
