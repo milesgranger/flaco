@@ -101,7 +101,7 @@ def memory_profile():
     with Database(DB_URI) as con:
         data1 = read_sql(stmt, con)
         _flaco_df1 = pd.DataFrame(data1, copy=False)
-
+    breakpoint()
     # ~260MB
     engine = create_engine(DB_URI)
     _pandas_df1 = pd.read_sql(stmt, engine)

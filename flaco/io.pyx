@@ -145,6 +145,7 @@ cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         arr_bytes = np.PyArray_SimpleNewFromData(1, &intp, np.NPY_UINT8, data.bytes._0.ptr)
         PyArray_ENABLEFLAGS(arr_bytes, np.NPY_OWNDATA)
         arr[idx] = arr_bytes
+        data.bytes._0.ptr = NULL  # indicate array was taken
 
     elif data.tag == lib.Data_Tag.Int8:
         arr[idx] = data.int8._0

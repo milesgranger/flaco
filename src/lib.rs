@@ -251,13 +251,35 @@ impl_update_in_place!(f32, Float32);
 
 impl UpdateInPlace for Option<Vec<u8>> {
     fn update_in_place(self, data: &mut Data) -> Result<()> {
-        match self {
-            Some(_) => mem::swap(data, &mut (self.into())),
-            None => {
-                if let Data::Bytes(_) = data {
-                    mem::swap(data, &mut Data::Null);
+        match data {
+            Data::Bytes(ptr) => {
+                match self {
+                    Some(value) => {
+                        let mut new_ptr = BytesPtr::from(value);
+                        mem::swap(ptr, &mut new_ptr);
+
+                        // new pointer reflects the old data now, so we need to drop it.
+                        // but only if caller lib didn't take ownership, signified by
+                        // setting the original pointer to null
+                        if !new_ptr.ptr.is_null() {
+                            let len = new_ptr.len as _;
+                            unsafe { let _ = Vec::from_raw_parts(new_ptr.ptr, len, len); }
+                        }
+                    }
+                    None => {
+                        if let Data::Bytes(_) = data {
+                            mem::swap(data, &mut Data::Null);
+                        }
+                    }
                 }
             }
+            Data::Null => {
+                // new allocation if previous iter was Null and now we have data
+                if self.is_some() {
+                    mem::swap(data, &mut (self.into()))
+                }
+            }
+            _ => return Err("Data type mismatch!".into()),
         }
         Ok(())
     }
@@ -268,9 +290,11 @@ impl UpdateInPlace for Option<String> {
             Data::String(ptr) => {
                 match self {
                     Some(string) => {
-                        let mut new_ptr = CString::new(string).unwrap().into_raw() as _;
-                        mem::swap(ptr, &mut new_ptr);
-                        let _ = unsafe { CString::from_raw(new_ptr as _) }; // now points to old data; need to drop
+                        let new_ptr: *mut c_char = CString::new(string).unwrap().into_raw() as _;
+                        unsafe {
+                            std::ptr::swap(*ptr as _, new_ptr);
+                            let _ = CString::from_raw(new_ptr as _); // now points to old data; need to drop
+                        }
                     }
                     None => {
                         if let Data::String(_) = data {
