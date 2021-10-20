@@ -59,6 +59,7 @@ setup(
     keywords="pandas postgres postgresql numpy rust python",
     url="https://github.com/milesgranger/flaco",
     long_description=pathlib.Path("README.md").read_text(errors="ignore"),
+    long_description_content_type="text/markdown",
     classifiers=[
         "Development Status :: 3 - Alpha",
         "License :: OSI Approved :: The Unlicense (Unlicense)",

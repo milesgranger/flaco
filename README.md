@@ -15,11 +15,13 @@ Have a gander at the initial [benchmarks](./benchmarks) 🏋
 flaco tends to use nearly ~3-5x less memory than standard `pandas.read_sql` 
 and about ~3x faster. However, it's probably 50x less stable at the moment. 😜
 
-To wet your appetite, here's a memory profile between flaco and pandas `read_sql` 
+To whet your appetite, here's a memory profile between flaco and `pandas.read_sql` 
 on a table with 2M rows with columns of various types. (see [test_benchmarks.py](benchmarks/test_benchmarks.py))
 *If the test data has null values, you can expect a ~3x saving, instead of the ~5x 
 you see here; therefore (hot tip 🔥), supply fill values in your queries where possible via `coalesce`.
+
 ```bash
+
 Line #    Mem usage    Increment  Occurences   Line Contents
 ============================================================
     99    140.5 MiB    140.5 MiB           1   @profile
