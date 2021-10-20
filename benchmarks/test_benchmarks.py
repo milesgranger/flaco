@@ -78,14 +78,17 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
     table = "test_table"
     engine = create_engine(DB_URI)
 
+    engine.execute(f"drop table if exists {table}")
+    engine.execute(f"create table {table} (col1 int, col2 int8, col3 float8, col4 float4, col5 text, col6 bytea)")
+
     df = pd.DataFrame()
     df["col1"] = np.random.randint(0, 1000, size=n_rows).astype(np.int32)
     df["col2"] = df.col1.astype(np.uint32)
     df["col3"] = df.col1.astype(np.float32)
     df["col4"] = df.col1.astype(np.float64)
     df["col5"] = df.col1.astype(str) + "-hello"
-    df["col6"] = df.col5.astype(bytes)
-    df.to_sql(table, index=False, con=engine, chunksize=10_000, if_exists="replace")
+    df["col6"] = df.col1.astype(bytes)
+    df.to_sql(table, index=False, con=engine, chunksize=10_000, if_exists="append")
 
     if include_nulls:
         df = df[:20]
@@ -97,16 +100,13 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
 def memory_profile():
     stmt = "select * from test_table"
 
-    # ~145MB
     with Database(DB_URI) as con:
-        data1 = read_sql(stmt, con)
-        _flaco_df1 = pd.DataFrame(data1, copy=False)
+        data = read_sql(stmt, con)
+        _flaco_df = pd.DataFrame(data, copy=False)
 
-    # ~260MB
     engine = create_engine(DB_URI)
-    _pandas_df1 = pd.read_sql(stmt, engine)
-
+    _pandas_df = pd.read_sql(stmt, engine)
 
 if __name__ == "__main__":
-    _table_setup(n_rows=500_000, include_nulls=True)
+    _table_setup(n_rows=2_000_000, include_nulls=False)
     memory_profile()

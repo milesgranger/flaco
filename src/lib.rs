@@ -114,8 +114,36 @@ pub extern "C" fn db_connect(ptr: DatabasePtr, exc: &mut Exception) {
 #[derive(Debug)]
 #[repr(C)]
 pub struct BytesPtr {
-    ptr: *mut u8,
-    len: u32,
+    pub ptr: *mut u8,
+    pub len: u32,
+}
+
+impl From<Vec<u8>> for BytesPtr {
+    fn from(v: Vec<u8>) -> Self {
+        let mut v = v;
+        v.shrink_to_fit();
+        let ptr = v.as_ptr() as _;
+        let len = v.len() as u32;
+        mem::forget(v);
+        BytesPtr { ptr, len }
+    }
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct StringPtr {
+    pub ptr: *mut c_char,
+    pub len: u32,
+}
+
+impl From<String> for StringPtr {
+    fn from(v: String) -> Self {
+        let cstring = CString::new(v).unwrap();
+        let len = cstring.as_bytes().len() as _;
+
+        let ptr = cstring.into_raw();
+        StringPtr { ptr, len }
+    }
 }
 
 #[derive(Debug)]
@@ -131,7 +159,7 @@ pub enum Data {
     Int64(i64),
     Float32(f32),
     Float64(f64),
-    String(*const c_char),
+    String(StringPtr),
     Null,
 }
 
@@ -154,16 +182,15 @@ simple_from!(i16, Int16);
 simple_from!(i32, Int32);
 simple_from!(u32, Uint32);
 simple_from!(i64, Int64);
+simple_from!(f64, Float64);
+simple_from!(f32, Float32);
 
 impl From<Option<Vec<u8>>> for Data {
     fn from(val: Option<Vec<u8>>) -> Self {
         match val {
-            Some(mut v) => {
-                v.shrink_to_fit();
-                let ptr = v.as_ptr() as _;
-                let len = v.len() as u32;
-                mem::forget(v);
-                Data::Bytes(BytesPtr { ptr, len })
+            Some(v) => {
+                let ptr = BytesPtr::from(v);
+                Data::Bytes(ptr)
             }
             None => Data::Null,
         }
@@ -172,23 +199,8 @@ impl From<Option<Vec<u8>>> for Data {
 impl From<Option<String>> for Data {
     fn from(val: Option<String>) -> Self {
         match val {
-            Some(string) => {
-                let cstring = ffi::CString::new(string).unwrap();
-                Data::String(cstring.into_raw())
-            }
+            Some(string) => Data::String(string.into()),
             None => Data::Null,
-        }
-    }
-}
-
-// special drop for any variants containing pointers
-impl Drop for Data {
-    fn drop(&mut self) {
-        match self {
-            Data::String(ptr) => {
-                let _ = unsafe { CString::from_raw(*ptr as _) };
-            }
-            _ => (),
         }
     }
 }
@@ -201,6 +213,85 @@ pub extern "C" fn free_db(ptr: DatabasePtr) {
 fn free_row_iter(ptr: &mut RowIteratorPtr) {
     let _ = unsafe { Box::from_raw(*ptr as *mut pg::RowIter) };
     *ptr = std::ptr::null_mut();
+}
+
+trait UpdateInPlace {
+    fn update_in_place(self, data: &mut Data) -> Result<()>;
+}
+
+macro_rules! impl_update_in_place {
+    ($t:ty, $i:ident) => {
+        impl UpdateInPlace for Option<$t> {
+            fn update_in_place(self, data: &mut Data) -> Result<()> {
+                let mut slf = self;
+                match slf {
+                    Some(ref mut value) => match data {
+                        Data::$i(v) => mem::swap(v, value),
+                        Data::Null => mem::swap(data, &mut Data::from(slf)),
+                        _ => return Err("Data type mismatch!".into()),
+                    },
+                    None => {
+                        if let Data::$i(_) = data {
+                            mem::swap(data, &mut Data::Null);
+                        }
+                    }
+                }
+                Ok(())
+            }
+        }
+    };
+}
+
+impl_update_in_place!(bool, Boolean);
+impl_update_in_place!(i8, Int8);
+impl_update_in_place!(i16, Int16);
+impl_update_in_place!(i32, Int32);
+impl_update_in_place!(u32, Uint32);
+impl_update_in_place!(i64, Int64);
+impl_update_in_place!(f64, Float64);
+impl_update_in_place!(f32, Float32);
+
+impl UpdateInPlace for Option<Vec<u8>> {
+    fn update_in_place(self, data: &mut Data) -> Result<()> {
+        match data {
+            Data::Bytes(ptr) => match self {
+                Some(value) => {
+                    let new_ptr = BytesPtr::from(value);
+                    let _ = mem::replace(ptr, new_ptr);
+                }
+                None => mem::swap(data, &mut Data::Null),
+            },
+            Data::Null => {
+                // new allocation if previous iter was Null and now we have data
+                if self.is_some() {
+                    mem::swap(data, &mut (self.into()))
+                }
+            }
+            _ => return Err("Data type mismatch!".into()),
+        }
+        Ok(())
+    }
+}
+impl UpdateInPlace for Option<String> {
+    fn update_in_place(self, data: &mut Data) -> Result<()> {
+        match data {
+            Data::String(ptr) => match self {
+                Some(string) => {
+                    let new_ptr = string.into();
+                    let _ = mem::replace(ptr, new_ptr);
+                }
+                None => mem::swap(data, &mut Data::Null),
+            },
+            Data::Null => {
+                // new allocation if previous iter was Null and now we have data
+                if self.is_some() {
+                    mem::swap(data, &mut (self.into()))
+                }
+            }
+            _ => return Err("Data type mismatch!".into()),
+        }
+        Ok(())
+    }
 }
 
 #[no_mangle]
@@ -265,92 +356,84 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
     assert_eq!(values.len(), values.capacity());
     assert_eq!(values.len(), row.len());
     for i in 0..row.len() {
+        let current_value = &mut values[i];
         let type_ = row.columns()[i].type_();
         // TODO: postgres-types: expose Inner enum which these variations
         // and have postgres Row.type/(or something) expose the variant
-        let val = match type_.name() {
-            "bytea" => row.get::<_, Option<Vec<u8>>>(i).into(),
-            "char" => row.get::<_, Option<i8>>(i).into(),
-            "smallint" | "smallserial" | "int2" => row.get::<_, Option<i16>>(i).into(),
-            "oid" => row.get::<_, Option<u32>>(i).into(),
-            "int4" | "int" | "serial" => row.get::<_, Option<i32>>(i).into(),
-            "bigint" | "int8" | "bigserial" => row.get::<_, Option<i64>>(i).into(),
-            "bool" => row.get::<_, Option<bool>>(i).into(),
+        match type_.name() {
+            "bytea" => row
+                .get::<_, Option<Vec<u8>>>(i)
+                .update_in_place(current_value)?,
+            "char" => row.get::<_, Option<i8>>(i).update_in_place(current_value)?,
+            "smallint" | "smallserial" | "int2" => row
+                .get::<_, Option<i16>>(i)
+                .update_in_place(current_value)?,
+            "oid" => row
+                .get::<_, Option<u32>>(i)
+                .update_in_place(current_value)?,
+            "int4" | "int" | "serial" => row
+                .get::<_, Option<i32>>(i)
+                .update_in_place(current_value)?,
+            "bigint" | "int8" | "bigserial" => row
+                .get::<_, Option<i64>>(i)
+                .update_in_place(current_value)?,
+            "bool" => row
+                .get::<_, Option<bool>>(i)
+                .update_in_place(current_value)?,
             "double precision" | "float8" => {
-                let val: Option<f64> = row.get(i);
-                Data::Float64(val.unwrap_or_else(|| f64::NAN))
+                row.get::<_, Option<f64>>(i)
+                    .or_else(|| Some(f64::NAN))
+                    .update_in_place(current_value)?;
             }
             "real" | "float4" => {
-                let val: Option<f32> = row.get(i);
-                Data::Float32(val.unwrap_or_else(|| f32::NAN))
+                row.get::<_, Option<f32>>(i)
+                    .or_else(|| Some(f32::NAN))
+                    .update_in_place(current_value)?;
             }
             "varchar" | "char(n)" | "text" | "citext" | "name" | "unknown" | "bpchar" => {
-                let string: Option<String> = row.get(i);
-                Data::from(string)
+                row.get::<_, Option<String>>(i)
+                    .update_in_place(current_value)?;
             }
             "timestamp" => {
-                let time_: Option<time::PrimitiveDateTime> = row.get(i);
-                match time_ {
-                    Some(t) => {
-                        Data::from(Some(t.format(&Rfc3339).unwrap_or_else(|_| t.to_string())))
-                    }
-                    None => Data::Null,
-                }
+                row.get::<_, Option<time::PrimitiveDateTime>>(i)
+                    .map(|time_| time_.format(&Rfc3339).unwrap_or_else(|_| time_.to_string()))
+                    .update_in_place(current_value)?;
             }
             "timestamp with time zone" | "timestamptz" => {
-                let time_: Option<time::OffsetDateTime> = row.get(i);
-                match time_ {
-                    Some(t) => {
-                        Data::from(Some(t.format(&Rfc3339).unwrap_or_else(|_| t.to_string())))
-                    }
-                    None => Data::Null,
-                }
+                row.get::<_, Option<time::OffsetDateTime>>(i)
+                    .map(|time_| time_.format(&Rfc3339).unwrap_or_else(|_| time_.to_string()))
+                    .update_in_place(current_value)?;
             }
             "date" => {
-                let time_: Option<time::Date> = row.get(i);
-                match time_ {
-                    Some(t) => {
-                        Data::from(Some(t.format(&Rfc3339).unwrap_or_else(|_| t.to_string())))
-                    }
-                    None => Data::Null,
-                }
+                row.get::<_, Option<time::Date>>(i)
+                    .map(|time_| time_.format(&Rfc3339).unwrap_or_else(|_| time_.to_string()))
+                    .update_in_place(current_value)?;
             }
             "time" => {
-                let time_: Option<time::Time> = row.get(i);
-                match time_ {
-                    Some(t) => {
-                        Data::from(Some(t.format(&Rfc3339).unwrap_or_else(|_| t.to_string())))
-                    }
-                    None => Data::Null,
-                }
+                row.get::<_, Option<time::Time>>(i)
+                    .map(|time_| time_.format(&Rfc3339).unwrap_or_else(|_| time_.to_string()))
+                    .update_in_place(current_value)?;
             }
             "json" | "jsonb" => {
-                let json: Option<serde_json::Value> = row.get(i);
-                match json {
-                    Some(j) => Data::from(Some(j.to_string())),
-                    None => Data::Null,
-                }
+                row.get::<_, Option<serde_json::Value>>(i)
+                    .map(|v| v.to_string())
+                    .update_in_place(current_value)?;
             }
             "uuid" => {
-                let uuid_: Option<uuid::Uuid> = row.get(i);
-                match uuid_ {
-                    Some(u) => Data::from(Some(u.to_string())),
-                    None => Data::Null,
-                }
+                row.get::<_, Option<uuid::Uuid>>(i)
+                    .map(|u| u.to_string())
+                    .update_in_place(current_value)?;
             }
             "inet" => {
-                let ip: Option<IpAddr> = row.get(i);
-                match ip {
-                    Some(i) => Data::from(Some(i.to_string())),
-                    None => Data::Null,
-                }
+                row.get::<_, Option<IpAddr>>(i)
+                    .map(|i| i.to_string())
+                    .update_in_place(current_value)?;
             }
             "numeric" => {
-                let decimal: Option<Decimal> = row.get(i);
-                match decimal {
-                    Some(d) => Data::Decimal(d.to_f64().unwrap_or_else(|| f64::NAN)),
-                    None => Data::Null,
-                }
+                row.get::<_, Option<Decimal>>(i)
+                    .map(|v| v.to_f64().unwrap_or_else(|| f64::NAN))
+                    .or_else(|| Some(f64::NAN))
+                    .update_in_place(current_value)?;
             }
             _ => {
                 let msg = format!(
@@ -361,9 +444,9 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
                 return Err(msg.into());
             }
         };
-        values[i] = val;
     }
-    //assert_eq!(values.len(), values.capacity());
+    assert_eq!(values.len(), values.capacity());
+    assert_eq!(values.len(), row.len());
     mem::forget(values);
     Ok(())
 }

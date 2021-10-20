@@ -11,6 +11,10 @@ cdef extern from "./flaco.h":
         np.uint8_t *ptr
         np.uint32_t len
 
+    ctypedef struct StringPtr:
+        char *ptr
+        np.uint32_t len
+
     ctypedef enum Data_Tag:
         Bytes
         Boolean
@@ -58,7 +62,7 @@ cdef extern from "./flaco.h":
         np.float64_t _0
 
     ctypedef struct String_Body:
-        const char *_0
+        StringPtr _0
 
     ctypedef struct Data:
         Data_Tag tag

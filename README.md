@@ -12,27 +12,28 @@ and [numpy](https://numpy.org/doc/stable/index.html). 🚀
 
 Have a gander at the initial [benchmarks](./benchmarks) 🏋
 
-flaco tends to use nearly ~2x less memory than standard `pandas.read_sql` 
+flaco tends to use nearly ~3-5x less memory than standard `pandas.read_sql` 
 and about ~3x faster. However, it's probably 50x less stable at the moment. 😜
 
 To wet your appetite, here's a memory profile between flaco and pandas `read_sql` 
-on a table with 2M rows with columns of various types.
+on a table with 2M rows with columns of various types. (see [test_benchmarks.py](benchmarks/test_benchmarks.py))
+*If the test data has null values, you can expect a ~3x saving, instead of the ~5x 
+you see here; therefore (hot tip 🔥), supply fill values in your queries where possible via `coalesce`.
 ```bash
 Line #    Mem usage    Increment  Occurences   Line Contents
 ============================================================
-    96    140.5 MiB    140.5 MiB           1   @profile
-    97                                         def memory_profile():
-    98    140.5 MiB      0.0 MiB           1       stmt = "select * from test_table"
-    99                                         
-   100                                             
-   101    140.5 MiB      0.0 MiB           1       with Database(DB_URI) as con:
-   102    715.7 MiB    575.1 MiB           1           data1 = read_sql(stmt, con)
-   103    715.9 MiB      0.3 MiB           1           _flaco_df1 = pd.DataFrame(data1, copy=False)
-   104                                         
-   105                                             
-   106    715.9 MiB      0.0 MiB           1       engine = create_engine(DB_URI)
-   107   1700.2 MiB    984.3 MiB           1       _pandas_df1 = pd.read_sql(stmt, engine)
-
+    99    140.5 MiB    140.5 MiB           1   @profile
+   100                                         def memory_profile():
+   101    140.5 MiB      0.0 MiB           1       stmt = "select * from test_table"
+   102                                         
+   103                                             
+   104    140.9 MiB      0.4 MiB           1       with Database(DB_URI) as con:
+   105    441.8 MiB    300.9 MiB           1           data = read_sql(stmt, con)
+   106    441.8 MiB      0.0 MiB           1           _flaco_df = pd.DataFrame(data, copy=False)
+   107                                         
+   108                                             
+   109    441.8 MiB      0.0 MiB           1       engine = create_engine(DB_URI)
+   110   2091.5 MiB   1649.7 MiB           1       _pandas_df = pd.read_sql(stmt, engine)
 ```
 
 ---
