@@ -114,8 +114,8 @@ pub extern "C" fn db_connect(ptr: DatabasePtr, exc: &mut Exception) {
 #[derive(Debug)]
 #[repr(C)]
 pub struct BytesPtr {
-    ptr: *mut u8,
-    len: u32,
+    pub ptr: *mut u8,
+    pub len: u32,
 }
 
 impl From<Vec<u8>> for BytesPtr {
@@ -132,13 +132,12 @@ impl From<Vec<u8>> for BytesPtr {
 #[derive(Debug)]
 #[repr(C)]
 pub struct StringPtr {
-    ptr: *mut c_char,
-    len: u32,
+    pub ptr: *mut c_char,
+    pub len: u32,
 }
 
 impl From<String> for StringPtr {
     fn from(v: String) -> Self {
-
         let cstring = CString::new(v).unwrap();
         let len = cstring.as_bytes().len() as _;
 
@@ -146,7 +145,6 @@ impl From<String> for StringPtr {
         StringPtr { ptr, len }
     }
 }
-
 
 #[derive(Debug)]
 #[repr(C)]
@@ -201,9 +199,7 @@ impl From<Option<Vec<u8>>> for Data {
 impl From<Option<String>> for Data {
     fn from(val: Option<String>) -> Self {
         match val {
-            Some(string) => {
-                Data::String(string.into())
-            }
+            Some(string) => Data::String(string.into()),
             None => Data::Null,
         }
     }
@@ -258,15 +254,13 @@ impl_update_in_place!(f32, Float32);
 impl UpdateInPlace for Option<Vec<u8>> {
     fn update_in_place(self, data: &mut Data) -> Result<()> {
         match data {
-            Data::Bytes(ptr) => {
-                match self {
-                    Some(value) => {
-                        let new_ptr = BytesPtr::from(value);
-                        let _ = mem::replace(ptr, new_ptr);
-                    }
-                    None => mem::swap(data, &mut Data::Null)
+            Data::Bytes(ptr) => match self {
+                Some(value) => {
+                    let new_ptr = BytesPtr::from(value);
+                    let _ = mem::replace(ptr, new_ptr);
                 }
-            }
+                None => mem::swap(data, &mut Data::Null),
+            },
             Data::Null => {
                 // new allocation if previous iter was Null and now we have data
                 if self.is_some() {

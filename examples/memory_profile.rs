@@ -27,7 +27,17 @@ fn main() {
         }
         n_rows += 1;
         for i in 0..n_columns {
-            let _data_ptr: *mut Data = index_row(row_data_array_ptr, n_columns, i);
+            let data_ptr: *mut Data = index_row(row_data_array_ptr, n_columns, i);
+            match unsafe { data_ptr.as_mut().unwrap() } {
+                Data::String(ptr) => unsafe {
+                    CString::from_raw(*ptr.ptr as _);
+                },
+                Data::Bytes(ptr) => unsafe {
+                    Vec::from_raw_parts(*ptr.ptr as *mut u8, ptr.len as _, ptr.len as _);
+                },
+                _ => (), // Read do not require manually freeing
+            }
+            unsafe { data_ptr.drop_in_place() };
         }
     }
 

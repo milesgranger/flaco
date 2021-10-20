@@ -10,9 +10,6 @@ from flaco cimport includes as lib
 
 np.import_array()
 
-cdef extern from "numpy/arrayobject.h":
-    void PyArray_ENABLEFLAGS(np.ndarray arr, int flags)
-
 
 cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     cdef bytes stmt_bytes = stmt.encode("utf-8")
@@ -141,11 +138,8 @@ cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         arr[idx] = data.boolean._0
 
     elif data.tag == lib.Data_Tag.Bytes:
-        intp = <np.npy_intp>data.bytes._0.len
-        arr_bytes = np.PyArray_SimpleNewFromData(1, &intp, np.NPY_UINT8, data.bytes._0.ptr)
-        PyArray_ENABLEFLAGS(arr_bytes, np.NPY_OWNDATA)
-        arr[idx] = arr_bytes
-        data.bytes._0.ptr = NULL
+        arr[idx] = data.bytes._0.ptr[:data.bytes._0.len]
+        free(data.bytes._0.ptr)
 
     elif data.tag == lib.Data_Tag.Int8:
         arr[idx] = data.int8._0

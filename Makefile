@@ -22,3 +22,7 @@ heaptrack:
 	cargo build --example memory_profile --release
 	chmod +x target/release/examples/memory_profile
 	heaptrack ./target/release/examples/memory_profile
+
+clean:
+	rm ./mprofile_*
+	rm ./heaptrack*

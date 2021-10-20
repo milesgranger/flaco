@@ -100,17 +100,13 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
 def memory_profile():
     stmt = "select * from test_table"
 
-    # ~145MB
     with Database(DB_URI) as con:
         data = read_sql(stmt, con)
         _flaco_df = pd.DataFrame(data, copy=False)
 
-    # ~260MB
     engine = create_engine(DB_URI)
     _pandas_df = pd.read_sql(stmt, engine)
-    breakpoint()
-
 
 if __name__ == "__main__":
-    #_table_setup(n_rows=2_000_000, include_nulls=False)
+    _table_setup(n_rows=2_000_000, include_nulls=False)
     memory_profile()
