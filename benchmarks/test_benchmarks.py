@@ -78,14 +78,16 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
     table = "test_table"
     engine = create_engine(DB_URI)
 
+    engine.execute(f"drop table if exists {table}")
+    engine.execute(f"create table {table} (col1 int, col2 int8, col3 float8, col4 float4, col5 text)")
+
     df = pd.DataFrame()
     df["col1"] = np.random.randint(0, 1000, size=n_rows).astype(np.int32)
     df["col2"] = df.col1.astype(np.uint32)
     df["col3"] = df.col1.astype(np.float32)
     df["col4"] = df.col1.astype(np.float64)
     df["col5"] = df.col1.astype(str) + "-hello"
-    df["col6"] = df.col5.astype(bytes)
-    df.to_sql(table, index=False, con=engine, chunksize=10_000, if_exists="replace")
+    df.to_sql(table, index=False, con=engine, chunksize=10_000, if_exists="append")
 
     if include_nulls:
         df = df[:20]
@@ -108,5 +110,5 @@ def memory_profile():
 
 
 if __name__ == "__main__":
-    #_table_setup(n_rows=2_000_000, include_nulls=False)
+    _table_setup(n_rows=2_000_000, include_nulls=True)
     memory_profile()

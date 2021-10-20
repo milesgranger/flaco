@@ -255,24 +255,10 @@ impl UpdateInPlace for Option<Vec<u8>> {
             Data::Bytes(ptr) => {
                 match self {
                     Some(value) => {
-                        let mut new_ptr = BytesPtr::from(value);
-                        mem::swap(ptr, &mut new_ptr);
-
-                        // new pointer reflects the old data now, so we need to drop it.
-                        // but only if caller lib didn't take ownership, signified by
-                        // setting the original pointer to null
-                        if !new_ptr.ptr.is_null() {
-                            let len = new_ptr.len as _;
-                            unsafe {
-                                let _ = Vec::from_raw_parts(new_ptr.ptr, len, len);
-                            }
-                        }
+                        let new_ptr = BytesPtr::from(value);
+                        let _ = mem::replace(ptr, new_ptr);
                     }
-                    None => {
-                        if let Data::Bytes(_) = data {
-                            mem::swap(data, &mut Data::Null);
-                        }
-                    }
+                    None => mem::swap(data, &mut Data::Null)
                 }
             }
             Data::Null => {
