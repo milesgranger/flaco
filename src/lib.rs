@@ -292,10 +292,11 @@ impl UpdateInPlace for Option<String> {
             Data::String(ptr) => match self {
                 Some(string) => {
                     let c_string = CString::new(string).unwrap();
-                    let len = c_string.as_bytes().len();
                     let new_ptr = c_string.into_raw();
-                    unsafe { std::ptr::swap_nonoverlapping(*ptr as _, new_ptr, len) };
-                    let _ = unsafe { CString::from_raw(new_ptr) };
+                    let out = mem::replace(ptr, new_ptr);
+                    if !new_ptr.is_null(){
+                        let _ = unsafe { CString::from_raw(out as _) };
+                    }
                 }
                 None => mem::swap(data, &mut Data::Null),
             },
