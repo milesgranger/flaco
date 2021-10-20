@@ -263,7 +263,9 @@ impl UpdateInPlace for Option<Vec<u8>> {
                         // setting the original pointer to null
                         if !new_ptr.ptr.is_null() {
                             let len = new_ptr.len as _;
-                            unsafe { let _ = Vec::from_raw_parts(new_ptr.ptr, len, len); }
+                            unsafe {
+                                let _ = Vec::from_raw_parts(new_ptr.ptr, len, len);
+                            }
                         }
                     }
                     None => {
@@ -287,22 +289,16 @@ impl UpdateInPlace for Option<Vec<u8>> {
 impl UpdateInPlace for Option<String> {
     fn update_in_place(self, data: &mut Data) -> Result<()> {
         match data {
-            Data::String(ptr) => {
-                match self {
-                    Some(string) => {
-                        let new_ptr: *mut c_char = CString::new(string).unwrap().into_raw() as _;
-                        unsafe {
-                            std::ptr::swap(*ptr as _, new_ptr);
-                            let _ = CString::from_raw(new_ptr as _); // now points to old data; need to drop
-                        }
-                    }
-                    None => {
-                        if let Data::String(_) = data {
-                            mem::swap(data, &mut Data::Null);
-                        }
-                    }
+            Data::String(ptr) => match self {
+                Some(string) => {
+                    let c_string = CString::new(string).unwrap();
+                    let len = c_string.as_bytes().len();
+                    let new_ptr = c_string.into_raw();
+                    unsafe { std::ptr::swap_nonoverlapping(*ptr as _, new_ptr, len) };
+                    let _ = unsafe { CString::from_raw(new_ptr) };
                 }
-            }
+                None => mem::swap(data, &mut Data::Null),
+            },
             Data::Null => {
                 // new allocation if previous iter was Null and now we have data
                 if self.is_some() {

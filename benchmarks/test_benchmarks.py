@@ -105,9 +105,8 @@ def memory_profile():
     # ~260MB
     engine = create_engine(DB_URI)
     _pandas_df = pd.read_sql(stmt, engine)
-    breakpoint()
 
 
 if __name__ == "__main__":
-    #_table_setup(n_rows=500_000, include_nulls=False)
+    _table_setup(n_rows=500_000, include_nulls=True)
     memory_profile()
