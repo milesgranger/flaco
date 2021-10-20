@@ -131,6 +131,25 @@ impl From<Vec<u8>> for BytesPtr {
 
 #[derive(Debug)]
 #[repr(C)]
+pub struct StringPtr {
+    ptr: *mut c_char,
+    len: u32,
+}
+
+impl From<String> for StringPtr {
+    fn from(v: String) -> Self {
+
+        let cstring = CString::new(v).unwrap();
+        let len = cstring.as_bytes().len() as _;
+
+        let ptr = cstring.into_raw();
+        StringPtr { ptr, len }
+    }
+}
+
+
+#[derive(Debug)]
+#[repr(C)]
 pub enum Data {
     Bytes(BytesPtr),
     Boolean(bool),
@@ -142,7 +161,7 @@ pub enum Data {
     Int64(i64),
     Float32(f32),
     Float64(f64),
-    String(*const c_char),
+    String(StringPtr),
     Null,
 }
 
@@ -183,22 +202,9 @@ impl From<Option<String>> for Data {
     fn from(val: Option<String>) -> Self {
         match val {
             Some(string) => {
-                let cstring = ffi::CString::new(string).unwrap();
-                Data::String(cstring.into_raw())
+                Data::String(string.into())
             }
             None => Data::Null,
-        }
-    }
-}
-
-// special drop for any variants containing pointers
-impl Drop for Data {
-    fn drop(&mut self) {
-        match self {
-            Data::String(ptr) => {
-                let _ = unsafe { CString::from_raw(*ptr as _) };
-            }
-            _ => (),
         }
     }
 }
@@ -277,12 +283,8 @@ impl UpdateInPlace for Option<String> {
         match data {
             Data::String(ptr) => match self {
                 Some(string) => {
-                    let c_string = CString::new(string).unwrap();
-                    let new_ptr = c_string.into_raw();
-                    let out = mem::replace(ptr, new_ptr);
-                    if !new_ptr.is_null(){
-                        let _ = unsafe { CString::from_raw(out as _) };
-                    }
+                    let new_ptr = string.into();
+                    let _ = mem::replace(ptr, new_ptr);
                 }
                 None => mem::swap(data, &mut Data::Null),
             },

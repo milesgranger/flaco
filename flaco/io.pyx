@@ -3,7 +3,7 @@
 
 cimport numpy as np
 import numpy as np
-from libc.stdlib cimport malloc
+from libc.stdlib cimport malloc, free
 from cython.operator cimport dereference as deref
 from flaco cimport includes as lib
 
@@ -169,7 +169,8 @@ cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         arr[idx] = data.float32._0
 
     elif data.tag == lib.Data_Tag.String:
-        arr[idx] = data.string._0.decode()
+        arr[idx] = data.string._0.ptr[:data.string._0.len].decode()
+        free(data.string._0.ptr)
 
     elif data.tag == lib.Data_Tag.Decimal:
         arr[idx] = data.decimal._0

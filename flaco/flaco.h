@@ -14,6 +14,11 @@ typedef struct {
   uint32_t len;
 } BytesPtr;
 
+typedef struct {
+  char *ptr;
+  uint32_t len;
+} StringPtr;
+
 typedef enum {
   Bytes,
   Boolean,
@@ -70,7 +75,7 @@ typedef struct {
 } Float64_Body;
 
 typedef struct {
-  const char *_0;
+  StringPtr _0;
 } String_Body;
 
 typedef struct {
