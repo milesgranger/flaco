@@ -9,6 +9,7 @@ on:
     types:
       - released
       - prereleased
+      - edited
 
 jobs:
 
