@@ -15,9 +15,15 @@ cdef extern from "./flaco.h":
         char *ptr
         np.uint32_t len
 
+    ctypedef struct DateInfo:
+        int year
+        int month
+        int day
+
     ctypedef enum Data_Tag:
         Bytes
         Boolean
+        Date
         Decimal
         Int8
         Int16
@@ -36,6 +42,9 @@ cdef extern from "./flaco.h":
 
     ctypedef struct Boolean_Body:
         bool _0
+
+    ctypedef struct Date_Body:
+        DateInfo _0
 
     ctypedef struct Decimal_Body:
         np.float64_t _0
@@ -69,6 +78,7 @@ cdef extern from "./flaco.h":
 
         Bytes_Body bytes
         Boolean_Body boolean
+        Date_Body date
         Decimal_Body decimal
         Int8_Body int8
         Int16_Body int16

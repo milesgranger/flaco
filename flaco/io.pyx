@@ -3,13 +3,15 @@
 
 cimport numpy as np
 import numpy as np
+import datetime as dt
 from libc.stdlib cimport malloc, free
+cimport cpython.datetime as cdt
 from cython.operator cimport dereference as deref
 from flaco cimport includes as lib
 
 
 np.import_array()
-
+cdt.import_datetime()
 
 cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     cdef bytes stmt_bytes = stmt.encode("utf-8")
@@ -125,6 +127,8 @@ cdef np.ndarray array_init(lib.Data data, int len):
         array = np.empty(shape=len, dtype=np.float64)
     elif data.tag == lib.Data_Tag.Null:
         array = np.empty(shape=len, dtype=object)
+    elif data.tag == lib.Data_Tag.Date:
+        array = np.empty(shape=len, dtype=cdt.date)
     else:
         raise ValueError(f"Unsupported tag: {data.tag}")
     return array
@@ -165,6 +169,9 @@ cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
     elif data.tag == lib.Data_Tag.String:
         arr[idx] = data.string._0.ptr[:data.string._0.len].decode()
         free(data.string._0.ptr)
+
+    elif data.tag == lib.Data_Tag.Date:
+        arr[idx] = cdt.date_new(data.date._0.year, data.date._0.month, data.date._0.day)
 
     elif data.tag == lib.Data_Tag.Decimal:
         arr[idx] = data.decimal._0

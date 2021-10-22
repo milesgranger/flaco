@@ -148,8 +148,17 @@ impl From<String> for StringPtr {
 
 #[derive(Debug)]
 #[repr(C)]
+pub struct DateInfo {
+    year: isize,
+    month: isize,
+    day: isize
+}
+
+#[derive(Debug)]
+#[repr(C)]
 pub enum Data {
     Bytes(BytesPtr),
+    Date(DateInfo),
     Boolean(bool),
     Decimal(f64), // TODO: support lossless decimal/numeric type handling
     Int8(i8),
@@ -184,6 +193,7 @@ simple_from!(u32, Uint32);
 simple_from!(i64, Int64);
 simple_from!(f64, Float64);
 simple_from!(f32, Float32);
+simple_from!(DateInfo, Date);
 
 impl From<Option<Vec<u8>>> for Data {
     fn from(val: Option<Vec<u8>>) -> Self {
@@ -250,6 +260,7 @@ impl_update_in_place!(u32, Uint32);
 impl_update_in_place!(i64, Int64);
 impl_update_in_place!(f64, Float64);
 impl_update_in_place!(f32, Float32);
+impl_update_in_place!(DateInfo, Date);
 
 impl UpdateInPlace for Option<Vec<u8>> {
     fn update_in_place(self, data: &mut Data) -> Result<()> {
@@ -406,7 +417,7 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
             }
             "date" => {
                 row.get::<_, Option<time::Date>>(i)
-                    .map(|time_| time_.format(&Rfc3339).unwrap_or_else(|_| time_.to_string()))
+                    .map(|time_| DateInfo { year: time_.year() as _, month: time_.month() as isize, day: time_.day() as isize} )
                     .update_in_place(current_value)?;
             }
             "time" => {

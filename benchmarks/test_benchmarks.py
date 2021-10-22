@@ -79,7 +79,17 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
     engine = create_engine(DB_URI)
 
     engine.execute(f"drop table if exists {table}")
-    engine.execute(f"create table {table} (col1 int, col2 int8, col3 float8, col4 float4, col5 text, col6 bytea)")
+    engine.execute(f"""
+        create table {table} (
+            col1 int, 
+            col2 int8, 
+            col3 float8, 
+            col4 float4, 
+            col5 text, 
+            col6 bytea,
+            col7 date
+        )
+    """)
 
     df = pd.DataFrame()
     df["col1"] = np.random.randint(0, 1000, size=n_rows).astype(np.int32)
@@ -88,6 +98,7 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
     df["col4"] = df.col1.astype(np.float64)
     df["col5"] = df.col1.astype(str) + "-hello"
     df["col6"] = df.col1.astype(bytes)
+    df["col7"] = pd.date_range('2000-01-01', '2001-01-01', periods=len(df))
     df.to_sql(table, index=False, con=engine, chunksize=10_000, if_exists="append")
 
     if include_nulls:

@@ -15,12 +15,19 @@ typedef struct {
 } BytesPtr;
 
 typedef struct {
+  intptr_t year;
+  intptr_t month;
+  intptr_t day;
+} DateInfo;
+
+typedef struct {
   char *ptr;
   uint32_t len;
 } StringPtr;
 
 typedef enum {
   Bytes,
+  Date,
   Boolean,
   Decimal,
   Int8,
@@ -37,6 +44,10 @@ typedef enum {
 typedef struct {
   BytesPtr _0;
 } Bytes_Body;
+
+typedef struct {
+  DateInfo _0;
+} Date_Body;
 
 typedef struct {
   bool _0;
@@ -82,6 +93,7 @@ typedef struct {
   Data_Tag tag;
   union {
     Bytes_Body bytes;
+    Date_Body date;
     Boolean_Body boolean;
     Decimal_Body decimal;
     Int8_Body int8;
