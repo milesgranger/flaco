@@ -87,7 +87,8 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
             col4 float4, 
             col5 text, 
             col6 bytea,
-            col7 date
+            col7 date,
+            col8 timestamp without time zone
         )
     """)
 
@@ -99,6 +100,7 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
     df["col5"] = df.col1.astype(str) + "-hello"
     df["col6"] = df.col1.astype(bytes)
     df["col7"] = pd.date_range('2000-01-01', '2001-01-01', periods=len(df))
+    df["col8"] = pd.to_datetime(df.col7)
     df.to_sql(table, index=False, con=engine, chunksize=10_000, if_exists="append")
 
     if include_nulls:
