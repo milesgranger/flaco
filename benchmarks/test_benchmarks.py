@@ -117,7 +117,8 @@ def memory_profile():
 
     engine = create_engine(DB_URI)
     _pandas_df = pd.read_sql(stmt, engine)
+    breakpoint()
 
 if __name__ == "__main__":
-    _table_setup(n_rows=2_000_000, include_nulls=False)
+    #_table_setup(n_rows=5_000, include_nulls=False)
     memory_profile()
