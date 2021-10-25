@@ -13,6 +13,9 @@ from flaco cimport includes as lib
 np.import_array()
 dt.import_datetime()
 
+cdef extern from "Python.h":
+    object PyUnicode_InternFromString(char *v)
+
 cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     cdef bytes stmt_bytes = stmt.encode("utf-8")
     cdef np.int32_t _n_rows = n_rows
@@ -122,7 +125,7 @@ cdef np.ndarray array_init(lib.Data data, int len):
     elif data.tag == lib.Data_Tag.Boolean:
         array = np.empty(shape=len, dtype=bool)
     elif data.tag == lib.Data_Tag.Bytes:
-        array = np.empty(shape=len, dtype=bytearray)
+        array = np.empty(shape=len, dtype=bytes)
     elif data.tag == lib.Data_Tag.Decimal:
         array = np.empty(shape=len, dtype=np.float64)
     elif data.tag == lib.Data_Tag.Null:
@@ -175,7 +178,7 @@ cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         arr[idx] = data.float32._0
 
     elif data.tag == lib.Data_Tag.String:
-        arr[idx] = data.string._0.ptr[:data.string._0.len].decode()
+        arr[idx] = PyUnicode_InternFromString(<char*>data.string._0.ptr)
         free(data.string._0.ptr)
 
     elif data.tag == lib.Data_Tag.Date:
