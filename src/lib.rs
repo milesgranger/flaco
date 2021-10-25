@@ -8,7 +8,6 @@ use std::net::IpAddr;
 use std::os::raw::c_char;
 use std::{ffi, mem};
 use time;
-use time::format_description::well_known::Rfc3339;
 
 type DatabasePtr = *mut u32;
 type RowIteratorPtr = *mut u32;

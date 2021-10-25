@@ -129,6 +129,10 @@ cdef np.ndarray array_init(lib.Data data, int len):
         array = np.empty(shape=len, dtype=object)
     elif data.tag == lib.Data_Tag.Date:
         array = np.empty(shape=len, dtype=cdt.date)
+    elif data.tag == lib.Data_Tag.DateTime:
+        array = np.empty(shape=len, dtype=cdt.datetime)
+    elif data.tag == lib.Data_Tag.Time:
+        array = np.empty(shape=len, dtype=cdt.time)
     else:
         raise ValueError(f"Unsupported tag: {data.tag}")
     return array
@@ -171,7 +175,32 @@ cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         free(data.string._0.ptr)
 
     elif data.tag == lib.Data_Tag.Date:
-        arr[idx] = cdt.date_new(data.date._0.year, data.date._0.month, data.date._0.day)
+        arr[idx] = cdt.date_new(
+            data.date._0.year,
+            data.date._0.month,
+            data.date._0.day
+        )
+
+    elif data.tag == lib.Data_Tag.DateTime:
+        arr[idx] = cdt.datetime_new(
+            data.date_time._0.date.year,
+            data.date_time._0.date.month,
+            data.date_time._0.date.day,
+            data.date_time._0.time.hour,
+            data.date_time._0.time.minute,
+            data.date_time._0.time.second,
+            data.date_time._0.time.usecond,
+            None
+        )
+
+    elif data.tag == lib.Data_Tag.Time:
+        arr[idx] = cdt.time_new(
+            data.time._0.hour,
+            data.time._0.minute,
+            data.time._0.second,
+            data.time._0.usecond,
+            None
+        )
 
     elif data.tag == lib.Data_Tag.Decimal:
         arr[idx] = data.decimal._0

@@ -122,5 +122,5 @@ def memory_profile():
     breakpoint()
 
 if __name__ == "__main__":
-    #_table_setup(n_rows=5_000, include_nulls=False)
+    _table_setup(n_rows=5_000, include_nulls=False)
     memory_profile()

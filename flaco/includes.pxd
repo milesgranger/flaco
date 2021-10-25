@@ -20,10 +20,22 @@ cdef extern from "./flaco.h":
         int month
         int day
 
+    ctypedef struct TimeInfo:
+        int hour
+        int minute
+        int second
+        int usecond
+
+    ctypedef struct DateTimeInfo:
+        DateInfo date
+        TimeInfo time
+
     ctypedef enum Data_Tag:
         Bytes
         Boolean
         Date
+        DateTime
+        Time
         Decimal
         Int8
         Int16
@@ -45,6 +57,12 @@ cdef extern from "./flaco.h":
 
     ctypedef struct Date_Body:
         DateInfo _0
+
+    ctypedef struct DateTime_Body:
+        DateTimeInfo _0
+
+    ctypedef struct Time_Body:
+        TimeInfo _0
 
     ctypedef struct Decimal_Body:
         np.float64_t _0
@@ -79,6 +97,8 @@ cdef extern from "./flaco.h":
         Bytes_Body bytes
         Boolean_Body boolean
         Date_Body date
+        DateTime_Body date_time
+        Time_Body time
         Decimal_Body decimal
         Int8_Body int8
         Int16_Body int16
