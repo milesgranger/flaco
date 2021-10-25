@@ -53,14 +53,8 @@ def test_basic(benchmark, loader: str):
     "n_rows", np.arange(100_000, 1_000_000, 100_000), ids=lambda val: f"rows={val}"
 )
 def test_incremental_size(benchmark, loader: str, n_rows: int):
-    n_cols = 5
-    table = "test_table"
-    engine = create_engine(DB_URI)
 
-    data = np.random.randint(0, 100_000, size=n_rows * n_cols).reshape((-1, n_cols))
-    pd.DataFrame(data).to_sql(
-        table, index=False, con=engine, chunksize=10_000, if_exists="replace"
-    )
+    table = _table_setup(n_rows=n_rows, include_nulls=False)
 
     if loader == "pandas":
         engine = create_engine(DB_URI)
@@ -109,7 +103,7 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
         df = df[:20]
         df.loc[:, :] = None
         df.to_sql(table, index=False, con=engine, if_exists="append")
-
+    return table
 
 @profile
 def memory_profile():
