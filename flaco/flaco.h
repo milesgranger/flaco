@@ -15,12 +15,47 @@ typedef struct {
 } BytesPtr;
 
 typedef struct {
+  int32_t year;
+  uint8_t month;
+  uint8_t day;
+} DateInfo;
+
+typedef struct {
+  uint8_t hour;
+  uint8_t minute;
+  uint8_t second;
+  uint32_t usecond;
+} TimeInfo;
+
+typedef struct {
+  DateInfo date;
+  TimeInfo time;
+} DateTimeInfo;
+
+typedef struct {
+  int8_t hours;
+  int8_t minutes;
+  int8_t seconds;
+  bool is_positive;
+} TzInfo;
+
+typedef struct {
+  DateInfo date;
+  TimeInfo time;
+  TzInfo tz;
+} DateTimeTzInfo;
+
+typedef struct {
   char *ptr;
   uint32_t len;
 } StringPtr;
 
 typedef enum {
   Bytes,
+  Date,
+  DateTime,
+  DateTimeTz,
+  Time,
   Boolean,
   Decimal,
   Int8,
@@ -37,6 +72,22 @@ typedef enum {
 typedef struct {
   BytesPtr _0;
 } Bytes_Body;
+
+typedef struct {
+  DateInfo _0;
+} Date_Body;
+
+typedef struct {
+  DateTimeInfo _0;
+} DateTime_Body;
+
+typedef struct {
+  DateTimeTzInfo _0;
+} DateTimeTz_Body;
+
+typedef struct {
+  TimeInfo _0;
+} Time_Body;
 
 typedef struct {
   bool _0;
@@ -82,6 +133,10 @@ typedef struct {
   Data_Tag tag;
   union {
     Bytes_Body bytes;
+    Date_Body date;
+    DateTime_Body date_time;
+    DateTimeTz_Body date_time_tz;
+    Time_Body time;
     Boolean_Body boolean;
     Decimal_Body decimal;
     Int8_Body int8;

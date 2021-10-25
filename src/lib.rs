@@ -8,7 +8,6 @@ use std::net::IpAddr;
 use std::os::raw::c_char;
 use std::{ffi, mem};
 use time;
-use time::format_description::well_known::Rfc3339;
 
 type DatabasePtr = *mut u32;
 type RowIteratorPtr = *mut u32;
@@ -148,8 +147,53 @@ impl From<String> for StringPtr {
 
 #[derive(Debug)]
 #[repr(C)]
+pub struct DateInfo {
+    year: i32,
+    month: u8,
+    day: u8,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct TimeInfo {
+    hour: u8,
+    minute: u8,
+    second: u8,
+    usecond: u32,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct DateTimeInfo {
+    date: DateInfo,
+    time: TimeInfo,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct TzInfo {
+    hours: i8,
+    minutes: i8,
+    seconds: i8,
+    is_positive: bool,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct DateTimeTzInfo {
+    date: DateInfo,
+    time: TimeInfo,
+    tz: TzInfo,
+}
+
+#[derive(Debug)]
+#[repr(C)]
 pub enum Data {
     Bytes(BytesPtr),
+    Date(DateInfo),
+    DateTime(DateTimeInfo),
+    DateTimeTz(DateTimeTzInfo),
+    Time(TimeInfo),
     Boolean(bool),
     Decimal(f64), // TODO: support lossless decimal/numeric type handling
     Int8(i8),
@@ -184,6 +228,10 @@ simple_from!(u32, Uint32);
 simple_from!(i64, Int64);
 simple_from!(f64, Float64);
 simple_from!(f32, Float32);
+simple_from!(DateInfo, Date);
+simple_from!(DateTimeInfo, DateTime);
+simple_from!(DateTimeTzInfo, DateTimeTz);
+simple_from!(TimeInfo, Time);
 
 impl From<Option<Vec<u8>>> for Data {
     fn from(val: Option<Vec<u8>>) -> Self {
@@ -202,6 +250,24 @@ impl From<Option<String>> for Data {
             Some(string) => Data::String(string.into()),
             None => Data::Null,
         }
+    }
+}
+
+#[inline(always)]
+fn month_to_u8(month: time::Month) -> u8 {
+    match month {
+        time::Month::January => 1,
+        time::Month::February => 2,
+        time::Month::March => 3,
+        time::Month::April => 4,
+        time::Month::May => 5,
+        time::Month::June => 6,
+        time::Month::July => 7,
+        time::Month::August => 8,
+        time::Month::September => 9,
+        time::Month::October => 10,
+        time::Month::November => 11,
+        time::Month::December => 12,
     }
 }
 
@@ -250,6 +316,10 @@ impl_update_in_place!(u32, Uint32);
 impl_update_in_place!(i64, Int64);
 impl_update_in_place!(f64, Float64);
 impl_update_in_place!(f32, Float32);
+impl_update_in_place!(DateInfo, Date);
+impl_update_in_place!(DateTimeInfo, DateTime);
+impl_update_in_place!(DateTimeTzInfo, DateTimeTz);
+impl_update_in_place!(TimeInfo, Time);
 
 impl UpdateInPlace for Option<Vec<u8>> {
     fn update_in_place(self, data: &mut Data) -> Result<()> {
@@ -396,22 +466,61 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
             }
             "timestamp" => {
                 row.get::<_, Option<time::PrimitiveDateTime>>(i)
-                    .map(|time_| time_.format(&Rfc3339).unwrap_or_else(|_| time_.to_string()))
+                    .map(|t| DateTimeInfo {
+                        date: DateInfo {
+                            year: t.year(),
+                            month: month_to_u8(t.month()),
+                            day: t.day(),
+                        },
+                        time: TimeInfo {
+                            hour: t.hour(),
+                            minute: t.minute(),
+                            second: t.second(),
+                            usecond: t.microsecond(),
+                        },
+                    })
                     .update_in_place(current_value)?;
             }
             "timestamp with time zone" | "timestamptz" => {
                 row.get::<_, Option<time::OffsetDateTime>>(i)
-                    .map(|time_| time_.format(&Rfc3339).unwrap_or_else(|_| time_.to_string()))
+                    .map(|t| DateTimeTzInfo {
+                        date: DateInfo {
+                            year: t.year() as _,
+                            month: month_to_u8(t.month()),
+                            day: t.day(),
+                        },
+                        time: TimeInfo {
+                            hour: t.hour(),
+                            minute: t.minute(),
+                            second: t.second(),
+                            usecond: t.microsecond(),
+                        },
+                        tz: TzInfo {
+                            hours: t.offset().whole_hours(),
+                            minutes: t.offset().minutes_past_hour(),
+                            seconds: t.offset().seconds_past_minute(),
+                            is_positive: t.offset().is_positive(),
+                        },
+                    })
                     .update_in_place(current_value)?;
             }
             "date" => {
                 row.get::<_, Option<time::Date>>(i)
-                    .map(|time_| time_.format(&Rfc3339).unwrap_or_else(|_| time_.to_string()))
+                    .map(|t| DateInfo {
+                        year: t.year() as _,
+                        month: month_to_u8(t.month()),
+                        day: t.day(),
+                    })
                     .update_in_place(current_value)?;
             }
             "time" => {
                 row.get::<_, Option<time::Time>>(i)
-                    .map(|time_| time_.format(&Rfc3339).unwrap_or_else(|_| time_.to_string()))
+                    .map(|t| TimeInfo {
+                        hour: t.hour(),
+                        minute: t.minute(),
+                        second: t.second(),
+                        usecond: t.microsecond(),
+                    })
                     .update_in_place(current_value)?;
             }
             "json" | "jsonb" => {

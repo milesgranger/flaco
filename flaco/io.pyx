@@ -3,13 +3,18 @@
 
 cimport numpy as np
 import numpy as np
+import datetime as dt
 from libc.stdlib cimport malloc, free
+cimport cpython.datetime as dt
 from cython.operator cimport dereference as deref
 from flaco cimport includes as lib
 
 
 np.import_array()
+dt.import_datetime()
 
+cdef extern from "Python.h":
+    object PyUnicode_InternFromString(char *v)
 
 cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     cdef bytes stmt_bytes = stmt.encode("utf-8")
@@ -120,11 +125,19 @@ cdef np.ndarray array_init(lib.Data data, int len):
     elif data.tag == lib.Data_Tag.Boolean:
         array = np.empty(shape=len, dtype=bool)
     elif data.tag == lib.Data_Tag.Bytes:
-        array = np.empty(shape=len, dtype=bytearray)
+        array = np.empty(shape=len, dtype=bytes)
     elif data.tag == lib.Data_Tag.Decimal:
         array = np.empty(shape=len, dtype=np.float64)
     elif data.tag == lib.Data_Tag.Null:
         array = np.empty(shape=len, dtype=object)
+    elif data.tag == lib.Data_Tag.Date:
+        array = np.empty(shape=len, dtype=dt.date)
+    elif data.tag == lib.Data_Tag.DateTime:
+        array = np.empty(shape=len, dtype=dt.datetime)
+    elif data.tag == lib.Data_Tag.DateTimeTz:
+        array = np.empty(shape=len, dtype=dt.datetime)
+    elif data.tag == lib.Data_Tag.Time:
+        array = np.empty(shape=len, dtype=dt.time)
     else:
         raise ValueError(f"Unsupported tag: {data.tag}")
     return array
@@ -133,6 +146,8 @@ cdef np.ndarray array_init(lib.Data data, int len):
 cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
     cdef np.ndarray[np.uint8_t, ndim=1] arr_bytes
     cdef np.npy_intp intp
+    cdef dt.timedelta delta
+    cdef object tzinfo
 
     if data.tag == lib.Data_Tag.Boolean:
         arr[idx] = data.boolean._0
@@ -163,8 +178,57 @@ cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         arr[idx] = data.float32._0
 
     elif data.tag == lib.Data_Tag.String:
-        arr[idx] = data.string._0.ptr[:data.string._0.len].decode()
+        arr[idx] = PyUnicode_InternFromString(<char*>data.string._0.ptr)
         free(data.string._0.ptr)
+
+    elif data.tag == lib.Data_Tag.Date:
+        arr[idx] = dt.date_new(
+            data.date._0.year,
+            data.date._0.month,
+            data.date._0.day
+        )
+
+    elif data.tag == lib.Data_Tag.DateTime:
+        arr[idx] = dt.datetime_new(
+            data.date_time._0.date.year,
+            data.date_time._0.date.month,
+            data.date_time._0.date.day,
+            data.date_time._0.time.hour,
+            data.date_time._0.time.minute,
+            data.date_time._0.time.second,
+            data.date_time._0.time.usecond,
+            None
+        )
+
+    elif data.tag == lib.Data_Tag.DateTimeTz:
+        delta = dt.timedelta_new(
+            data.date_time_tz._0.tz.hours,
+            data.date_time_tz._0.tz.minutes,
+            data.date_time_tz._0.tz.seconds
+        )
+        if data.date_time_tz._0.tz.is_positive:
+            tzinfo = dt.timezone(delta)
+        else:
+            tzinfo = dt.timezone(-delta)
+        arr[idx] = dt.datetime_new(
+            data.date_time_tz._0.date.year,
+            data.date_time_tz._0.date.month,
+            data.date_time_tz._0.date.day,
+            data.date_time_tz._0.time.hour,
+            data.date_time_tz._0.time.minute,
+            data.date_time_tz._0.time.second,
+            data.date_time_tz._0.time.usecond,
+            tzinfo
+        )
+
+    elif data.tag == lib.Data_Tag.Time:
+        arr[idx] = dt.time_new(
+            data.time._0.hour,
+            data.time._0.minute,
+            data.time._0.second,
+            data.time._0.usecond,
+            None
+        )
 
     elif data.tag == lib.Data_Tag.Decimal:
         arr[idx] = data.decimal._0
