@@ -88,7 +88,8 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
             col5 text, 
             col6 bytea,
             col7 date,
-            col8 timestamp without time zone
+            col8 timestamp without time zone,
+            col9 timestamp with time zone
         )
     """)
 
@@ -101,6 +102,7 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
     df["col6"] = df.col1.astype(bytes)
     df["col7"] = pd.date_range('2000-01-01', '2001-01-01', periods=len(df))
     df["col8"] = pd.to_datetime(df.col7)
+    df["col9"] = pd.to_datetime(df.col7, utc=True)
     df.to_sql(table, index=False, con=engine, chunksize=10_000, if_exists="append")
 
     if include_nulls:
@@ -111,7 +113,10 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
 
 @profile
 def memory_profile():
-    stmt = "select * from test_table"
+    stmt = "select col1, col2, col3, col4, col5, col6, col7, col8 from test_table"
+
+    import connectorx as cx
+    _cx_df = cx.read_sql(DB_URI, stmt, return_type="pandas")
 
     with Database(DB_URI) as con:
         data = read_sql(stmt, con)
@@ -122,5 +127,5 @@ def memory_profile():
     #breakpoint()
 
 if __name__ == "__main__":
-    _table_setup(n_rows=1_000_000, include_nulls=False)
+    #_table_setup(n_rows=500_000, include_nulls=False)
     memory_profile()

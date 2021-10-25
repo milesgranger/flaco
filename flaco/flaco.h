@@ -35,6 +35,7 @@ typedef struct {
 typedef struct {
   int8_t hours;
   int8_t minutes;
+  int8_t seconds;
   bool is_positive;
 } TzInfo;
 

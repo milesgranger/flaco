@@ -174,6 +174,7 @@ pub struct DateTimeInfo {
 pub struct TzInfo {
     hours: i8,
     minutes: i8,
+    seconds: i8,
     is_positive: bool,
 }
 
@@ -497,6 +498,7 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
                         tz: TzInfo {
                             hours: t.offset().whole_hours(),
                             minutes: t.offset().minutes_past_hour(),
+                            seconds: t.offset().seconds_past_minute(),
                             is_positive: t.offset().is_positive(),
                         },
                     })
