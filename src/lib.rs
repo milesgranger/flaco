@@ -469,13 +469,13 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
                         date: DateInfo {
                             year: t.year(),
                             month: month_to_u8(t.month()),
-                            day: t.day() as _,
+                            day: t.day(),
                         },
                         time: TimeInfo {
-                            hour: t.hour() as _,
-                            minute: t.minute() as _,
-                            second: t.second() as _,
-                            usecond: t.microsecond() as _,
+                            hour: t.hour(),
+                            minute: t.minute(),
+                            second: t.second(),
+                            usecond: t.microsecond(),
                         },
                     })
                     .update_in_place(current_value)?;
@@ -514,10 +514,10 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
             "time" => {
                 row.get::<_, Option<time::Time>>(i)
                     .map(|t| TimeInfo {
-                        hour: t.hour() as _,
-                        minute: t.minute() as _,
-                        second: t.second() as _,
-                        usecond: t.microsecond() as _,
+                        hour: t.hour(),
+                        minute: t.minute(),
+                        second: t.second(),
+                        usecond: t.microsecond(),
                     })
                     .update_in_place(current_value)?;
             }
