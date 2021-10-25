@@ -128,13 +128,13 @@ cdef np.ndarray array_init(lib.Data data, int len):
     elif data.tag == lib.Data_Tag.Null:
         array = np.empty(shape=len, dtype=object)
     elif data.tag == lib.Data_Tag.Date:
-        array = np.empty(shape=len, dtype=object)
+        array = np.empty(shape=len, dtype=dt.date)
     elif data.tag == lib.Data_Tag.DateTime:
-        array = np.empty(shape=len, dtype=object)
+        array = np.empty(shape=len, dtype=dt.datetime)
     elif data.tag == lib.Data_Tag.DateTimeTz:
-        array = np.empty(shape=len, dtype=object)
+        array = np.empty(shape=len, dtype=dt.datetime)
     elif data.tag == lib.Data_Tag.Time:
-        array = np.empty(shape=len, dtype=object)
+        array = np.empty(shape=len, dtype=dt.time)
     else:
         raise ValueError(f"Unsupported tag: {data.tag}")
     return array

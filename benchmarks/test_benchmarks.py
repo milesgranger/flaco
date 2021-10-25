@@ -113,7 +113,7 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
 
 @profile
 def memory_profile():
-    stmt = "select col1, col2, col3, col4, col5, col6, col7, col8 from test_table"
+    stmt = "select * from test_table"
 
     import connectorx as cx
     _cx_df = cx.read_sql(DB_URI, stmt, return_type="pandas")
@@ -124,7 +124,6 @@ def memory_profile():
 
     engine = create_engine(DB_URI)
     _pandas_df = pd.read_sql(stmt, engine)
-    #breakpoint()
 
 if __name__ == "__main__":
     #_table_setup(n_rows=500_000, include_nulls=False)
