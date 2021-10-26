@@ -117,7 +117,7 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
 
 @profile
 def memory_profile():
-    stmt = "select * from test_table"
+    stmt = "select col1, col2, col3, col4, col5, col6 from test_table"
 
     _cx_df = cx.read_sql(DB_URI, stmt, return_type="pandas")
 
