@@ -8,6 +8,11 @@ me know.
 Benchmarks are hard, if there is a benchmark you'd like to
 add or revise, please open a PR! 🔥
 
+Note that your results may vary, I've noted the libs tested here seem to have
+strengths and weaknesses on different data types. For example, as mentioned in the intro,
+flaco seems to do very well with floats, ints, etc, but connectorx does better
+with temporal types (date, time, timestamp). Therefore, depending on the types
+of data you are reading, may dictate which library is best for your needs.
 
 Run benchmarks by installing `pip install .[dev]` or
 installing the dev requirements you find in `setup.py` if
@@ -16,11 +21,6 @@ from source. Then `make bench`
 
 Test data is either generated, or comes from the 
 [pagila](https://github.com/xzilla/pagila/tree/master) git submodule.
-
-
-TLDR;
-Here is a cheap plot of the benchmarks from the incremental size
-benchmark; loading tables starting from 10k up to 1.1 million.
 
 
 ```
