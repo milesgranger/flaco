@@ -49,7 +49,7 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     # Begin looping until no rows are returned
     cdef np.uint32_t row_idx = 0
     cdef np.uint32_t one = 1
-    cdef np.uint32_t n_increment = 2_000_000
+    cdef np.uint32_t n_increment = 1_000
     cdef np.uint32_t current_array_len = 0
     cdef lib.RowDataArrayPtr row_data_ptr
     cdef lib.Data *data
