@@ -125,7 +125,7 @@ cdef np.ndarray array_init(lib.Data data, int len):
     elif data.tag == lib.Data_Tag.Boolean:
         array = np.empty(shape=len, dtype=bool)
     elif data.tag == lib.Data_Tag.Bytes:
-        array = np.empty(shape=len, dtype=bytes)
+        array = np.empty(shape=len, dtype=bytearray)
     elif data.tag == lib.Data_Tag.Decimal:
         array = np.empty(shape=len, dtype=np.float64)
     elif data.tag == lib.Data_Tag.Null:
