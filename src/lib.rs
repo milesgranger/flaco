@@ -289,18 +289,20 @@ macro_rules! impl_update_in_place {
     ($t:ty, $i:ident) => {
         impl UpdateInPlace for Option<$t> {
             fn update_in_place(self, data: &mut Data) -> Result<()> {
-                let mut slf = self;
-                match slf {
-                    Some(ref mut value) => match data {
-                        Data::$i(v) => mem::swap(v, value),
-                        Data::Null => mem::swap(data, &mut Data::from(slf)),
-                        _ => return Err("Data type mismatch!".into()),
+                match data {
+                    Data::$i(ptr) => match self {
+                        Some(val) => {
+                            let _ = mem::replace(ptr, val.into());
+                        }
+                        None => mem::swap(data, &mut Data::Null),
                     },
-                    None => {
-                        if let Data::$i(_) = data {
-                            mem::swap(data, &mut Data::Null);
+                    Data::Null => {
+                        // new allocation if previous iter was Null and now we have data
+                        if self.is_some() {
+                            mem::swap(data, &mut (self.into()))
                         }
                     }
+                    _ => return Err("Data type mismatch!".into()),
                 }
                 Ok(())
             }
@@ -320,49 +322,8 @@ impl_update_in_place!(DateInfo, Date);
 impl_update_in_place!(DateTimeInfo, DateTime);
 impl_update_in_place!(DateTimeTzInfo, DateTimeTz);
 impl_update_in_place!(TimeInfo, Time);
-
-impl UpdateInPlace for Option<Vec<u8>> {
-    fn update_in_place(self, data: &mut Data) -> Result<()> {
-        match data {
-            Data::Bytes(ptr) => match self {
-                Some(value) => {
-                    let new_ptr = BytesPtr::from(value);
-                    let _ = mem::replace(ptr, new_ptr);
-                }
-                None => mem::swap(data, &mut Data::Null),
-            },
-            Data::Null => {
-                // new allocation if previous iter was Null and now we have data
-                if self.is_some() {
-                    mem::swap(data, &mut (self.into()))
-                }
-            }
-            _ => return Err("Data type mismatch!".into()),
-        }
-        Ok(())
-    }
-}
-impl UpdateInPlace for Option<String> {
-    fn update_in_place(self, data: &mut Data) -> Result<()> {
-        match data {
-            Data::String(ptr) => match self {
-                Some(string) => {
-                    let new_ptr = string.into();
-                    let _ = mem::replace(ptr, new_ptr);
-                }
-                None => mem::swap(data, &mut Data::Null),
-            },
-            Data::Null => {
-                // new allocation if previous iter was Null and now we have data
-                if self.is_some() {
-                    mem::swap(data, &mut (self.into()))
-                }
-            }
-            _ => return Err("Data type mismatch!".into()),
-        }
-        Ok(())
-    }
-}
+impl_update_in_place!(Vec<u8>, Bytes);
+impl_update_in_place!(String, String);
 
 #[no_mangle]
 pub extern "C" fn next_row(

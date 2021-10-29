@@ -104,9 +104,9 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
     df["col5"] = df.col1.astype(str) + "-hello"
     df["col6"] = df.col1.astype(bytes)
     df["col7"] = pd.date_range('2000-01-01', '2001-01-01', periods=len(df))
-    #df["col8"] = pd.to_datetime(df.col7)
-    #df["col9"] = pd.to_datetime(df.col7, utc=True)
-    #df["col10"] = df.col9.dt.time
+    df["col8"] = pd.to_datetime(df.col7)
+    df["col9"] = pd.to_datetime(df.col7, utc=True)
+    df["col10"] = df.col9.dt.time
     df.to_sql(table, index=False, con=engine, chunksize=10_000, if_exists="append")
 
     if include_nulls:
@@ -117,7 +117,7 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
 
 @profile
 def memory_profile():
-    stmt = "select col1, col2, col3, col4, col5, col6, col7 from test_table"
+    stmt = "select col1, col2, col3, col4, col5, col6, col7, col8, col9, col10 from test_table"
 
     _cx_df = cx.read_sql(DB_URI, stmt, return_type="pandas")
 
