@@ -12,13 +12,13 @@ and [numpy](https://numpy.org/doc/stable/index.html). 🚀
 
 Have a gander at the initial [benchmarks](./benchmarks) 🏋
 
-flaco tends to use nearly ~3-10x less memory than standard `pandas.read_sql` 
+flaco tends to use nearly ~3-6x less memory than standard `pandas.read_sql` 
 and about ~3x faster. However, it's probably 50x less stable at the moment. 😜
 
 To whet your appetite, here's a memory profile between flaco, [connectorx](https://github.com/sfu-db/connector-x) 
 and `pandas.read_sql` on a table with 1M rows with columns of various types. 
-(see [test_benchmarks.py](benchmarks/test_benchmarks.py)) *If the test data, 
-specifically integer types, has null values, you can expect a ~5x saving, instead of the ~9x 
+(see [test_benchmarks.py](benchmarks/test_benchmarks.py)) *If the data, 
+specifically integer types, has null values, you can expect a bit lower savings than the ~4x 
 you see here; therefore (hot tip 🔥), supply fill values in your queries where possible via `coalesce`.
 
 ```bash
@@ -82,8 +82,9 @@ No. It varies in a few ways:
 
 > How does this compare with [connectorx](https://github.com/sfu-db/connector-x)?
 
-Connectorx is an _exceptionally_ impressive library. They have much wider support
-for a range of data sources, while flaco only supports postgres for now.
+Connectorx is an _exceptionally_ impressive library, and more mature than flaco. 
+They have much wider support for a range of data sources, while flaco only 
+supports postgres for now.
 
 Performance wise, benchmarking seems to indicate flaco is more performant in most (all?)
 datatypes aside from temporal types (datetime, date, time), where Connectorx seems to
