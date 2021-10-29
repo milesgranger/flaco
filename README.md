@@ -27,16 +27,15 @@ Line #    Mem usage    Increment  Occurences   Line Contents
    118     98.3 MiB     98.3 MiB           1   @profile
    119                                         def memory_profile():
    120     98.3 MiB      0.0 MiB           1       stmt = "select * from test_table"
-   121                                             # connectorx is a _very_ good alternative, with better source support
-   122    306.4 MiB    208.1 MiB           1       _cx_df = cx.read_sql(DB_URI, stmt, return_type="pandas")
+   121                                             # connectorx is a _very_ good alternative with better source support
+   122    363.0 MiB    264.6 MiB           1       _cx_df = cx.read_sql(DB_URI, stmt, return_type="pandas")
    123                                         
-   124    306.4 MiB      0.0 MiB           1       with Database(DB_URI) as con:
-   125    407.6 MiB    101.3 MiB           1           data = read_sql(stmt, con, n_rows=1_000_000)
-   126    407.6 MiB      0.0 MiB           1           _flaco_df = pd.DataFrame(data, copy=False)
+   124    363.0 MiB      0.0 MiB           1       with Database(DB_URI) as con:
+   125    622.6 MiB    259.6 MiB           1           data = read_sql(stmt, con, n_rows=1_000_000)
+   126    638.1 MiB     15.5 MiB           1           _flaco_df = pd.DataFrame(data, copy=False)
    127                                         
-   128    412.2 MiB      4.5 MiB           1       engine = create_engine(DB_URI)
-   129   1306.3 MiB    894.1 MiB           1       _pandas_df = pd.read_sql(stmt, engine)
-
+   128    642.8 MiB      4.7 MiB           1       engine = create_engine(DB_URI)
+   129   1798.3 MiB   1155.5 MiB           1       _pandas_df = pd.read_sql(stmt, engine)
 ```
 
 ---
