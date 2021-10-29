@@ -16,13 +16,15 @@ dt.import_datetime()
 cdef extern from "Python.h":
     object PyUnicode_InternFromString(char *v)
 
-cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
-    cdef bytes stmt_bytes = stmt.encode("utf-8")
-    cdef np.int32_t _n_rows = n_rows
-    cdef lib.RowDataArrayPtr row_data_array_ptr = NULL
-    cdef lib.RowColumnNamesArrayPtr column_names = NULL
-    cdef np.uint32_t n_columns = 0
-    cdef lib.Exception exc = NULL
+
+cpdef dict read_sql(str stmt, Database db, int n_rows=-1, int size_hint=-1):
+    cdef:
+        bytes stmt_bytes = stmt.encode("utf-8")
+        np.int32_t _n_rows = n_rows
+        lib.RowDataArrayPtr row_data_array_ptr = NULL
+        lib.RowColumnNamesArrayPtr column_names = NULL
+        np.uint32_t n_columns = 0
+        lib.Exception exc = NULL
 
     cdef lib.RowIteratorPtr row_iterator = lib.read_sql(
         <char*>stmt_bytes, db.db_ptr, &exc
@@ -46,12 +48,14 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
     cdef list output = []
 
     # Begin looping until no rows are returned
-    cdef np.uint32_t row_idx = 0
-    cdef np.uint32_t one = 1
-    cdef np.uint32_t n_increment = 1_000
-    cdef np.uint32_t current_array_len = 0
-    cdef lib.RowDataArrayPtr row_data_ptr
-    cdef lib.Data *data
+    cdef:
+        np.uint32_t row_idx     = 0
+        np.uint32_t one         = 1
+        np.uint32_t n_increment = 1_000 if size_hint == -1 else size_hint
+        np.uint32_t current_array_len = 0
+        lib.RowDataArrayPtr row_data_ptr
+        lib.Data *data
+
     while True:
         if row_iterator == NULL:
             break
@@ -87,7 +91,7 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1):
         for i in range(0, n_columns):
             resize(output[i], row_idx)
 
-    return {columns[i]: output[i] for i in range(columns.shape[0])}
+    return {columns[i]: output[i] for i in range(n_columns)}
 
 cdef int resize(np.ndarray arr, int len) except -1:
     cdef int refcheck = 0

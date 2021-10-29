@@ -16,24 +16,24 @@ cdef extern from "./flaco.h":
         np.uint32_t len
 
     ctypedef struct DateInfo:
-        int year
-        int month
-        int day
+        np.int8_t year
+        np.uint8_t month
+        np.uint8_t day
 
     ctypedef struct TimeInfo:
-        int hour
-        int minute
-        int second
-        int usecond
+        np.uint8_t hour
+        np.uint8_t minute
+        np.uint8_t second
+        np.uint32_t usecond
 
     ctypedef struct DateTimeInfo:
         DateInfo date
         TimeInfo time
 
     ctypedef struct TzInfo:
-        int hours
-        int minutes
-        int seconds
+        np.int8_t hours
+        np.int8_t minutes
+        np.int8_t seconds
         bool is_positive
 
     ctypedef struct DateTimeTzInfo:
