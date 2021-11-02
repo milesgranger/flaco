@@ -167,6 +167,11 @@ cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
     cdef np.npy_intp intp
     cdef dt.timedelta delta
     cdef object tzinfo
+    cdef:
+        lib.DateInfo date_
+        lib.DateTimeInfo datetime_
+        lib.DateTimeTzInfo datetimetz_
+        lib.TimeInfo time_
 
     if data.tag == lib.Data_Tag.Boolean:
         arr[idx] = deref(data.boolean._0)
@@ -201,51 +206,55 @@ cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         free(deref(data.string._0).ptr)
 
     elif data.tag == lib.Data_Tag.Date:
+        date_ = deref(data.date._0)
         arr[idx] = dt.date_new(
-            deref(data.date._0).year,
-            deref(data.date._0).month,
-            deref(data.date._0).day
+            date_.year,
+            date_.month,
+            date_.day
         )
 
     elif data.tag == lib.Data_Tag.DateTime:
+        datetime_ = deref(data.date_time._0)
         arr[idx] = dt.datetime_new(
-            deref(data.date_time._0).date.year,
-            deref(data.date_time._0).date.month,
-            deref(data.date_time._0).date.day,
-            deref(data.date_time._0).time.hour,
-            deref(data.date_time._0).time.minute,
-            deref(data.date_time._0).time.second,
-            deref(data.date_time._0).time.usecond,
+            datetime_.date.year,
+            datetime_.date.month,
+            datetime_.date.day,
+            datetime_.time.hour,
+            datetime_.time.minute,
+            datetime_.time.second,
+            datetime_.time.usecond,
             None
         )
 
     elif data.tag == lib.Data_Tag.DateTimeTz:
+        datetimetz_ = deref(data.date_time_tz._0)
         delta = dt.timedelta_new(
-            deref(data.date_time_tz._0).tz.hours,
-            deref(data.date_time_tz._0).tz.minutes,
-            deref(data.date_time_tz._0).tz.seconds
+            datetimetz_.tz.hours,
+            datetimetz_.tz.minutes,
+            datetimetz_.tz.seconds
         )
         if data.date_time_tz._0.tz.is_positive:
             tzinfo = dt.timezone(delta)
         else:
             tzinfo = dt.timezone(-delta)
         arr[idx] = dt.datetime_new(
-            deref(data.date_time_tz._0).date.year,
-            deref(data.date_time_tz._0).date.month,
-            deref(data.date_time_tz._0).date.day,
-            deref(data.date_time_tz._0).time.hour,
-            deref(data.date_time_tz._0).time.minute,
-            deref(data.date_time_tz._0).time.second,
-            deref(data.date_time_tz._0).time.usecond,
+            datetimetz_.date.year,
+            datetimetz_.date.month,
+            datetimetz_.date.day,
+            datetimetz_.time.hour,
+            datetimetz_.time.minute,
+            datetimetz_.time.second,
+            datetimetz_.time.usecond,
             tzinfo
         )
 
     elif data.tag == lib.Data_Tag.Time:
+        time_ = deref(data.time._0)
         arr[idx] = dt.time_new(
-            deref(data.time._0).hour,
-            deref(data.time._0).minute,
-            deref(data.time._0).second,
-            deref(data.time._0).usecond,
+            time_.hour,
+            time_.minute,
+            time_.second,
+            time_.usecond,
             None
         )
 
