@@ -131,9 +131,8 @@ pub struct BytesPtr {
     pub len: u32,
 }
 
-impl From<Vec<u8>> for BytesPtr {
-    fn from(v: Vec<u8>) -> Self {
-        let mut v = v;
+impl From<&mut Vec<u8>> for BytesPtr {
+    fn from(v: &mut Vec<u8>) -> Self {
         v.shrink_to_fit();
         let ptr = v.as_ptr() as _;
         let len = v.len() as u32;
@@ -149,12 +148,10 @@ pub struct StringPtr {
     pub len: u32,
 }
 
-impl From<String> for StringPtr {
-    fn from(v: String) -> Self {
-        let cstring = CString::new(v).unwrap();
+impl From<&mut CString> for StringPtr {
+    fn from(cstring: &mut CString) -> Self {
         let len = cstring.as_bytes().len() as _;
-
-        let ptr = cstring.into_raw();
+        let ptr = cstring.as_ptr() as _;
         StringPtr { ptr, len }
     }
 }
@@ -349,6 +346,7 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr, bump: &mut Bump) -> R
         let value: Data = match type_.name() {
             "bytea" => row
                 .get::<_, Option<Vec<u8>>>(i)
+                .map(|v| bump.alloc(v))
                 .map(|v| bump.alloc(v.into()) as *mut BytesPtr)
                 .into(),
             "char" => row
@@ -387,6 +385,7 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr, bump: &mut Bump) -> R
                 .into(),
             "varchar" | "char(n)" | "text" | "citext" | "name" | "unknown" | "bpchar" => row
                 .get::<_, Option<String>>(i)
+                .map(|v| bump.alloc(CString::new(v).unwrap()))
                 .map(|v| bump.alloc(v.into()) as *mut StringPtr)
                 .into(),
             "timestamp" => row
@@ -454,15 +453,18 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr, bump: &mut Bump) -> R
                 .into(),
             "json" | "jsonb" => row
                 .get::<_, Option<serde_json::Value>>(i)
-                .map(|v| bump.alloc(v.to_string().into()) as *mut StringPtr)
+                .map(|v| bump.alloc(CString::new(v.to_string()).unwrap()))
+                .map(|v| bump.alloc(v.into()) as *mut StringPtr)
                 .into(),
             "uuid" => row
                 .get::<_, Option<uuid::Uuid>>(i)
-                .map(|u| bump.alloc(u.to_string().into()) as *mut StringPtr)
+                .map(|u| bump.alloc(CString::new(u.to_string()).unwrap()))
+                .map(|u| bump.alloc(u.into()) as *mut StringPtr)
                 .into(),
             "inet" => row
                 .get::<_, Option<IpAddr>>(i)
-                .map(|i| bump.alloc(i.to_string().into()) as *mut StringPtr)
+                .map(|i| bump.alloc(CString::new(i.to_string()).unwrap()))
+                .map(|i| bump.alloc(i.into()) as *mut StringPtr)
                 .into(),
             "numeric" => row
                 .get::<_, Option<Decimal>>(i)
