@@ -9,6 +9,8 @@ typedef uint32_t *DatabasePtr;
 
 typedef char *Exception;
 
+typedef uint32_t *SessionPtr;
+
 typedef struct {
   uint8_t *ptr;
   uint32_t len;
@@ -70,63 +72,63 @@ typedef enum {
 } Data_Tag;
 
 typedef struct {
-  BytesPtr _0;
+  BytesPtr *_0;
 } Bytes_Body;
 
 typedef struct {
-  DateInfo _0;
+  DateInfo *_0;
 } Date_Body;
 
 typedef struct {
-  DateTimeInfo _0;
+  DateTimeInfo *_0;
 } DateTime_Body;
 
 typedef struct {
-  DateTimeTzInfo _0;
+  DateTimeTzInfo *_0;
 } DateTimeTz_Body;
 
 typedef struct {
-  TimeInfo _0;
+  TimeInfo *_0;
 } Time_Body;
 
 typedef struct {
-  bool _0;
+  bool *_0;
 } Boolean_Body;
 
 typedef struct {
-  double _0;
+  double *_0;
 } Decimal_Body;
 
 typedef struct {
-  int8_t _0;
+  int8_t *_0;
 } Int8_Body;
 
 typedef struct {
-  int16_t _0;
+  int16_t *_0;
 } Int16_Body;
 
 typedef struct {
-  int32_t _0;
+  int32_t *_0;
 } Int32_Body;
 
 typedef struct {
-  uint32_t _0;
+  uint32_t *_0;
 } Uint32_Body;
 
 typedef struct {
-  int64_t _0;
+  int64_t *_0;
 } Int64_Body;
 
 typedef struct {
-  float _0;
+  float *_0;
 } Float32_Body;
 
 typedef struct {
-  double _0;
+  double *_0;
 } Float64_Body;
 
 typedef struct {
-  StringPtr _0;
+  StringPtr *_0;
 } String_Body;
 
 typedef struct {
@@ -164,12 +166,17 @@ void db_disconnect(DatabasePtr ptr);
 
 void free_db(DatabasePtr ptr);
 
+void free_session(SessionPtr session);
+
 Data *index_row(RowDataArrayPtr row_data_array_ptr, uint32_t len, uint32_t idx);
+
+SessionPtr init_session(void);
 
 void next_row(RowIteratorPtr *row_iter_ptr,
               RowDataArrayPtr *row_data_array_ptr,
               uint32_t *n_columns,
               RowColumnNamesArrayPtr *column_names,
+              SessionPtr *session,
               Exception *exc);
 
 RowIteratorPtr read_sql(const char *stmt_ptr, DatabasePtr db_ptr, Exception *exc);

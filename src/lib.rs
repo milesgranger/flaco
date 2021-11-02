@@ -1,4 +1,5 @@
 //#![warn(missing_docs)]
+use bumpalo::Bump;
 use postgres as pg;
 use postgres::fallible_iterator::FallibleIterator;
 use postgres::RowIter;
@@ -14,8 +15,21 @@ type RowIteratorPtr = *mut u32;
 type RowDataArrayPtr = *mut u32;
 type RowColumnNamesArrayPtr = *mut *mut c_char;
 type Exception = *mut c_char;
+type SessionPtr = *mut u32;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+
+#[no_mangle]
+pub extern "C" fn init_session() -> SessionPtr {
+    Box::into_raw(Box::new(Bump::new())) as SessionPtr
+}
+
+#[no_mangle]
+pub extern "C" fn free_session(session: SessionPtr) {
+    let mut bump = unsafe { Box::from_raw(session as *mut Bump) };
+    bump.reset();
+}
 
 /// Supports creating connections to a given connection URI
 pub struct Database {
@@ -189,28 +203,28 @@ pub struct DateTimeTzInfo {
 #[derive(Debug)]
 #[repr(C)]
 pub enum Data {
-    Bytes(BytesPtr),
-    Date(DateInfo),
-    DateTime(DateTimeInfo),
-    DateTimeTz(DateTimeTzInfo),
-    Time(TimeInfo),
-    Boolean(bool),
-    Decimal(f64), // TODO: support lossless decimal/numeric type handling
-    Int8(i8),
-    Int16(i16),
-    Int32(i32),
-    Uint32(u32),
-    Int64(i64),
-    Float32(f32),
-    Float64(f64),
-    String(StringPtr),
+    Bytes(*mut BytesPtr),
+    Date(*mut DateInfo),
+    DateTime(*mut DateTimeInfo),
+    DateTimeTz(*mut DateTimeTzInfo),
+    Time(*mut TimeInfo),
+    Boolean(*mut bool),
+    Decimal(*mut f64), // TODO: support lossless decimal/numeric type handling
+    Int8(*mut i8),
+    Int16(*mut i16),
+    Int32(*mut i32),
+    Uint32(*mut u32),
+    Int64(*mut i64),
+    Float32(*mut f32),
+    Float64(*mut f64),
+    String(*mut StringPtr),
     Null,
 }
 
 macro_rules! simple_from {
     ($t:ty, $i:ident) => {
-        impl From<Option<$t>> for Data {
-            fn from(val: Option<$t>) -> Self {
+        impl From<Option<*mut $t>> for Data {
+            fn from(val: Option<*mut $t>) -> Self {
                 match val {
                     Some(v) => Data::$i(v),
                     None => Data::Null,
@@ -232,26 +246,8 @@ simple_from!(DateInfo, Date);
 simple_from!(DateTimeInfo, DateTime);
 simple_from!(DateTimeTzInfo, DateTimeTz);
 simple_from!(TimeInfo, Time);
-
-impl From<Option<Vec<u8>>> for Data {
-    fn from(val: Option<Vec<u8>>) -> Self {
-        match val {
-            Some(v) => {
-                let ptr = BytesPtr::from(v);
-                Data::Bytes(ptr)
-            }
-            None => Data::Null,
-        }
-    }
-}
-impl From<Option<String>> for Data {
-    fn from(val: Option<String>) -> Self {
-        match val {
-            Some(string) => Data::String(string.into()),
-            None => Data::Null,
-        }
-    }
-}
+simple_from!(BytesPtr, Bytes);
+simple_from!(StringPtr, String);
 
 #[inline(always)]
 fn month_to_u8(month: time::Month) -> u8 {
@@ -281,59 +277,17 @@ fn free_row_iter(ptr: &mut RowIteratorPtr) {
     *ptr = std::ptr::null_mut();
 }
 
-trait UpdateInPlace {
-    fn update_in_place(self, data: &mut Data) -> Result<()>;
-}
-
-macro_rules! impl_update_in_place {
-    ($t:ty, $i:ident) => {
-        impl UpdateInPlace for Option<$t> {
-            fn update_in_place(self, data: &mut Data) -> Result<()> {
-                match data {
-                    Data::$i(ptr) => match self {
-                        Some(val) => {
-                            let _ = mem::replace(ptr, val.into());
-                        }
-                        None => mem::swap(data, &mut Data::Null),
-                    },
-                    Data::Null => {
-                        // new allocation if previous iter was Null and now we have data
-                        if self.is_some() {
-                            mem::swap(data, &mut (self.into()))
-                        }
-                    }
-                    _ => return Err("Data type mismatch!".into()),
-                }
-                Ok(())
-            }
-        }
-    };
-}
-
-impl_update_in_place!(bool, Boolean);
-impl_update_in_place!(i8, Int8);
-impl_update_in_place!(i16, Int16);
-impl_update_in_place!(i32, Int32);
-impl_update_in_place!(u32, Uint32);
-impl_update_in_place!(i64, Int64);
-impl_update_in_place!(f64, Float64);
-impl_update_in_place!(f32, Float32);
-impl_update_in_place!(DateInfo, Date);
-impl_update_in_place!(DateTimeInfo, DateTime);
-impl_update_in_place!(DateTimeTzInfo, DateTimeTz);
-impl_update_in_place!(TimeInfo, Time);
-impl_update_in_place!(Vec<u8>, Bytes);
-impl_update_in_place!(String, String);
-
 #[no_mangle]
 pub extern "C" fn next_row(
     row_iter_ptr: &mut RowIteratorPtr,
     row_data_array_ptr: &mut RowDataArrayPtr,
     n_columns: &mut u32,
     column_names: &mut RowColumnNamesArrayPtr,
+    session: &mut SessionPtr,
     exc: &mut Exception,
 ) {
     let mut row_iter = unsafe { Box::from_raw(*row_iter_ptr as *mut RowIter) };
+    let mut bump = unsafe { Box::from_raw(*session as *mut Bump) };
     match row_iter.next() {
         Ok(maybe_row) => match maybe_row {
             Some(row) => {
@@ -344,7 +298,7 @@ pub extern "C" fn next_row(
                     *&mut *column_names = row_column_names(&row) as _;
                     *n_columns = row.len() as _;
                 }
-                if let Err(err) = row_data(row, row_data_array_ptr) {
+                if let Err(err) = row_data(row, row_data_array_ptr, &mut bump) {
                     string_into_exception(err, exc);
                     let len = *n_columns;
                     free_row_data_array(row_data_array_ptr, len);
@@ -368,6 +322,7 @@ pub extern "C" fn next_row(
         }
     };
     mem::forget(row_iter);
+    mem::forget(bump);
 }
 
 pub fn init_row_data_array(row: &pg::Row) -> RowDataArrayPtr {
@@ -382,52 +337,62 @@ pub fn init_row_data_array(row: &pg::Row) -> RowDataArrayPtr {
     ptr as _
 }
 
-fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
+fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr, bump: &mut Bump) -> Result<()> {
     let mut values = unsafe { Vec::from_raw_parts(*array_ptr as _, row.len(), row.len()) };
     assert_eq!(values.len(), values.capacity());
     assert_eq!(values.len(), row.len());
+    bump.reset();
     for i in 0..row.len() {
-        let current_value = &mut values[i];
         let type_ = row.columns()[i].type_();
         // TODO: postgres-types: expose Inner enum which these variations
         // and have postgres Row.type/(or something) expose the variant
-        match type_.name() {
+        let value: Data = match type_.name() {
             "bytea" => row
                 .get::<_, Option<Vec<u8>>>(i)
-                .update_in_place(current_value)?,
-            "char" => row.get::<_, Option<i8>>(i).update_in_place(current_value)?,
+                .map(|v| bump.alloc(v.into()) as *mut BytesPtr)
+                .into(),
+            "char" => row
+                .get::<_, Option<i8>>(i)
+                .map(|v| bump.alloc(v) as *mut i8)
+                .into(),
             "smallint" | "smallserial" | "int2" => row
                 .get::<_, Option<i16>>(i)
-                .update_in_place(current_value)?,
+                .map(|v| bump.alloc(v) as *mut i16)
+                .into(),
             "oid" => row
                 .get::<_, Option<u32>>(i)
-                .update_in_place(current_value)?,
+                .map(|v| bump.alloc(v) as *mut u32)
+                .into(),
             "int4" | "int" | "serial" => row
                 .get::<_, Option<i32>>(i)
-                .update_in_place(current_value)?,
+                .map(|v| bump.alloc(v) as *mut i32)
+                .into(),
             "bigint" | "int8" | "bigserial" => row
                 .get::<_, Option<i64>>(i)
-                .update_in_place(current_value)?,
+                .map(|v| bump.alloc(v) as *mut i64)
+                .into(),
             "bool" => row
                 .get::<_, Option<bool>>(i)
-                .update_in_place(current_value)?,
-            "double precision" | "float8" => {
-                row.get::<_, Option<f64>>(i)
-                    .or_else(|| Some(f64::NAN))
-                    .update_in_place(current_value)?;
-            }
-            "real" | "float4" => {
-                row.get::<_, Option<f32>>(i)
-                    .or_else(|| Some(f32::NAN))
-                    .update_in_place(current_value)?;
-            }
-            "varchar" | "char(n)" | "text" | "citext" | "name" | "unknown" | "bpchar" => {
-                row.get::<_, Option<String>>(i)
-                    .update_in_place(current_value)?;
-            }
-            "timestamp" => {
-                row.get::<_, Option<time::PrimitiveDateTime>>(i)
-                    .map(|t| DateTimeInfo {
+                .map(|v| bump.alloc(v) as *mut bool)
+                .into(),
+            "double precision" | "float8" => row
+                .get::<_, Option<f64>>(i)
+                .or_else(|| Some(f64::NAN))
+                .map(|v| bump.alloc(v) as *mut f64)
+                .into(),
+            "real" | "float4" => row
+                .get::<_, Option<f32>>(i)
+                .or_else(|| Some(f32::NAN))
+                .map(|v| bump.alloc(v) as *mut f32)
+                .into(),
+            "varchar" | "char(n)" | "text" | "citext" | "name" | "unknown" | "bpchar" => row
+                .get::<_, Option<String>>(i)
+                .map(|v| bump.alloc(v.into()) as *mut StringPtr)
+                .into(),
+            "timestamp" => row
+                .get::<_, Option<time::PrimitiveDateTime>>(i)
+                .map(|t| {
+                    bump.alloc(DateTimeInfo {
                         date: DateInfo {
                             year: t.year(),
                             month: month_to_u8(t.month()),
@@ -439,12 +404,13 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
                             second: t.second(),
                             usecond: t.microsecond(),
                         },
-                    })
-                    .update_in_place(current_value)?;
-            }
-            "timestamp with time zone" | "timestamptz" => {
-                row.get::<_, Option<time::OffsetDateTime>>(i)
-                    .map(|t| DateTimeTzInfo {
+                    }) as *mut DateTimeInfo
+                })
+                .into(),
+            "timestamp with time zone" | "timestamptz" => row
+                .get::<_, Option<time::OffsetDateTime>>(i)
+                .map(|t| {
+                    bump.alloc(DateTimeTzInfo {
                         date: DateInfo {
                             year: t.year() as _,
                             month: month_to_u8(t.month()),
@@ -462,49 +428,48 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
                             seconds: t.offset().seconds_past_minute(),
                             is_positive: t.offset().is_positive(),
                         },
-                    })
-                    .update_in_place(current_value)?;
-            }
-            "date" => {
-                row.get::<_, Option<time::Date>>(i)
-                    .map(|t| DateInfo {
+                    }) as *mut DateTimeTzInfo
+                })
+                .into(),
+            "date" => row
+                .get::<_, Option<time::Date>>(i)
+                .map(|t| {
+                    bump.alloc(DateInfo {
                         year: t.year() as _,
                         month: month_to_u8(t.month()),
                         day: t.day(),
-                    })
-                    .update_in_place(current_value)?;
-            }
-            "time" => {
-                row.get::<_, Option<time::Time>>(i)
-                    .map(|t| TimeInfo {
+                    }) as *mut DateInfo
+                })
+                .into(),
+            "time" => row
+                .get::<_, Option<time::Time>>(i)
+                .map(|t| {
+                    bump.alloc(TimeInfo {
                         hour: t.hour(),
                         minute: t.minute(),
                         second: t.second(),
                         usecond: t.microsecond(),
-                    })
-                    .update_in_place(current_value)?;
-            }
-            "json" | "jsonb" => {
-                row.get::<_, Option<serde_json::Value>>(i)
-                    .map(|v| v.to_string())
-                    .update_in_place(current_value)?;
-            }
-            "uuid" => {
-                row.get::<_, Option<uuid::Uuid>>(i)
-                    .map(|u| u.to_string())
-                    .update_in_place(current_value)?;
-            }
-            "inet" => {
-                row.get::<_, Option<IpAddr>>(i)
-                    .map(|i| i.to_string())
-                    .update_in_place(current_value)?;
-            }
-            "numeric" => {
-                row.get::<_, Option<Decimal>>(i)
-                    .map(|v| v.to_f64().unwrap_or_else(|| f64::NAN))
-                    .or_else(|| Some(f64::NAN))
-                    .update_in_place(current_value)?;
-            }
+                    }) as *mut TimeInfo
+                })
+                .into(),
+            "json" | "jsonb" => row
+                .get::<_, Option<serde_json::Value>>(i)
+                .map(|v| bump.alloc(v.to_string().into()) as *mut StringPtr)
+                .into(),
+            "uuid" => row
+                .get::<_, Option<uuid::Uuid>>(i)
+                .map(|u| bump.alloc(u.to_string().into()) as *mut StringPtr)
+                .into(),
+            "inet" => row
+                .get::<_, Option<IpAddr>>(i)
+                .map(|i| bump.alloc(i.to_string().into()) as *mut StringPtr)
+                .into(),
+            "numeric" => row
+                .get::<_, Option<Decimal>>(i)
+                .map(|v| v.to_f64().unwrap_or_else(|| f64::NAN))
+                .or_else(|| Some(f64::NAN))
+                .map(|v| bump.alloc(v) as *mut f64)
+                .into(),
             _ => {
                 let msg = format!(
                     "Unimplemented conversion for: '{}'; consider casting to text",
@@ -514,6 +479,7 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
                 return Err(msg.into());
             }
         };
+        values[i] = value;
     }
     assert_eq!(values.len(), values.capacity());
     assert_eq!(values.len(), row.len());

@@ -25,6 +25,7 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1, int size_hint=-1):
         lib.RowColumnNamesArrayPtr column_names = NULL
         np.uint32_t n_columns = 0
         lib.Exception exc = NULL
+        lib.SessionPtr session = lib.init_session()
 
     cdef lib.RowIteratorPtr row_iterator = lib.read_sql(
         <char*>stmt_bytes, db.db_ptr, &exc
@@ -33,7 +34,14 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1, int size_hint=-1):
         raise FlacoException(exc.decode())
 
     # Read first row
-    lib.next_row(&row_iterator, &row_data_array_ptr, &n_columns, &column_names, &exc)
+    lib.next_row(
+        &row_iterator,
+        &row_data_array_ptr,
+        &n_columns,
+        &column_names,
+        &session,
+        &exc
+    )
     if exc != NULL:
         raise FlacoException(exc.decode())
 
@@ -82,7 +90,14 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1, int size_hint=-1):
 
             row_idx += one
 
-            lib.next_row(&row_iterator, &row_data_array_ptr, &n_columns, &column_names, &exc)
+            lib.next_row(
+                &row_iterator,
+                &row_data_array_ptr,
+                &n_columns,
+                &column_names,
+                &session,
+                &exc
+            )
             if exc != NULL:
                 raise FlacoException(exc.decode())
 
@@ -90,7 +105,7 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1, int size_hint=-1):
     if _n_rows == -1 and current_array_len != row_idx:
         for i in range(0, n_columns):
             resize(output[i], row_idx)
-
+    lib.free_session(session)
     return {columns[i]: output[i] for i in range(n_columns)}
 
 cdef int resize(np.ndarray arr, int len) except -1:
@@ -154,88 +169,88 @@ cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
     cdef object tzinfo
 
     if data.tag == lib.Data_Tag.Boolean:
-        arr[idx] = data.boolean._0
+        arr[idx] = deref(data.boolean._0)
 
     elif data.tag == lib.Data_Tag.Bytes:
-        arr[idx] = data.bytes._0.ptr[:data.bytes._0.len]
+        arr[idx] = deref(data.bytes._0).ptr[:deref(data.bytes._0).len]
         free(data.bytes._0.ptr)
 
     elif data.tag == lib.Data_Tag.Int8:
-        arr[idx] = data.int8._0
+        arr[idx] = deref(data.int8._0)
 
     elif data.tag == lib.Data_Tag.Int16:
-        arr[idx] = data.int16._0
+        arr[idx] = deref(data.int16._0)
 
     elif data.tag == lib.Data_Tag.Uint32:
-        arr[idx] = data.uint32._0
+        arr[idx] = deref(data.uint32._0)
 
     elif data.tag == lib.Data_Tag.Int64:
-        arr[idx] = data.int64._0
+        arr[idx] = deref(data.int64._0)
 
     elif data.tag == lib.Data_Tag.Int32:
-        arr[idx] = data.int32._0
+        arr[idx] = deref(data.int32._0)
 
     elif data.tag == lib.Data_Tag.Float64:
-        arr[idx] = data.float64._0
+        arr[idx] = deref(data.float64._0)
 
     elif data.tag == lib.Data_Tag.Float32:
-        arr[idx] = data.float32._0
+        arr[idx] = deref(data.float32._0)
 
     elif data.tag == lib.Data_Tag.String:
-        arr[idx] = PyUnicode_InternFromString(<char*>data.string._0.ptr)
-        free(data.string._0.ptr)
+        arr[idx] = PyUnicode_InternFromString(<char*>deref(data.string._0).ptr)
+        free(deref(data.string._0).ptr)
 
     elif data.tag == lib.Data_Tag.Date:
         arr[idx] = dt.date_new(
-            data.date._0.year,
-            data.date._0.month,
-            data.date._0.day
+            deref(data.date._0).year,
+            deref(data.date._0).month,
+            deref(data.date._0).day
         )
 
     elif data.tag == lib.Data_Tag.DateTime:
         arr[idx] = dt.datetime_new(
-            data.date_time._0.date.year,
-            data.date_time._0.date.month,
-            data.date_time._0.date.day,
-            data.date_time._0.time.hour,
-            data.date_time._0.time.minute,
-            data.date_time._0.time.second,
-            data.date_time._0.time.usecond,
+            deref(data.date_time._0).date.year,
+            deref(data.date_time._0).date.month,
+            deref(data.date_time._0).date.day,
+            deref(data.date_time._0).time.hour,
+            deref(data.date_time._0).time.minute,
+            deref(data.date_time._0).time.second,
+            deref(data.date_time._0).time.usecond,
             None
         )
 
     elif data.tag == lib.Data_Tag.DateTimeTz:
         delta = dt.timedelta_new(
-            data.date_time_tz._0.tz.hours,
-            data.date_time_tz._0.tz.minutes,
-            data.date_time_tz._0.tz.seconds
+            deref(data.date_time_tz._0).tz.hours,
+            deref(data.date_time_tz._0).tz.minutes,
+            deref(data.date_time_tz._0).tz.seconds
         )
         if data.date_time_tz._0.tz.is_positive:
             tzinfo = dt.timezone(delta)
         else:
             tzinfo = dt.timezone(-delta)
         arr[idx] = dt.datetime_new(
-            data.date_time_tz._0.date.year,
-            data.date_time_tz._0.date.month,
-            data.date_time_tz._0.date.day,
-            data.date_time_tz._0.time.hour,
-            data.date_time_tz._0.time.minute,
-            data.date_time_tz._0.time.second,
-            data.date_time_tz._0.time.usecond,
+            deref(data.date_time_tz._0).date.year,
+            deref(data.date_time_tz._0).date.month,
+            deref(data.date_time_tz._0).date.day,
+            deref(data.date_time_tz._0).time.hour,
+            deref(data.date_time_tz._0).time.minute,
+            deref(data.date_time_tz._0).time.second,
+            deref(data.date_time_tz._0).time.usecond,
             tzinfo
         )
 
     elif data.tag == lib.Data_Tag.Time:
         arr[idx] = dt.time_new(
-            data.time._0.hour,
-            data.time._0.minute,
-            data.time._0.second,
-            data.time._0.usecond,
+            deref(data.time._0).hour,
+            deref(data.time._0).minute,
+            deref(data.time._0).second,
+            deref(data.time._0).usecond,
             None
         )
 
     elif data.tag == lib.Data_Tag.Decimal:
-        arr[idx] = data.decimal._0
+        arr[idx] = deref(data.decimal._0)
 
     elif data.tag == lib.Data_Tag.Null:
         if arr.dtype != object:
