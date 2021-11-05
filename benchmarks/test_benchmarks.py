@@ -131,4 +131,9 @@ def memory_profile():
 
 if __name__ == "__main__":
     #_table_setup(n_rows=1_000_000, include_nulls=False)
-    memory_profile()
+    stmt = "select * from test_table"
+
+    with Database(DB_URI) as con:
+        data = read_sql(stmt, con)
+        _flaco_df = pd.DataFrame(data, copy=False)
+    #memory_profile()
