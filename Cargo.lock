@@ -162,6 +162,7 @@ dependencies = [
  "bumpalo",
  "cbindgen",
  "postgres",
+ "postgres-protocol",
  "rust_decimal",
  "serde_json",
  "time",

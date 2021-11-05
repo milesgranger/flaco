@@ -13,7 +13,7 @@ and [numpy](https://numpy.org/doc/stable/index.html). 🚀
 Have a gander at the initial [benchmarks](./benchmarks) 🏋
 
 flaco tends to use nearly ~3-6x less memory than standard `pandas.read_sql` 
-and about ~3x faster. However, it's probably 50x less stable at the moment. 😜
+and about ~2-3x faster. However, it's probably 50x less stable at the moment. 😜
 
 To whet your appetite, here's a memory profile between flaco, [connectorx](https://github.com/sfu-db/connector-x) 
 and `pandas.read_sql` on a table with 1M rows with columns of various types. 
@@ -24,18 +24,18 @@ you see here; therefore (hot tip 🔥), supply fill values in your queries where
 ```bash
 Line #    Mem usage    Increment  Occurences   Line Contents
 ============================================================
-   118     98.3 MiB     98.3 MiB           1   @profile
+   118     98.0 MiB     98.0 MiB           1   @profile
    119                                         def memory_profile():
-   120     98.3 MiB      0.0 MiB           1       stmt = "select * from test_table"
-   121                                             # connectorx is a _very_ good alternative with better source support
-   122    363.0 MiB    264.6 MiB           1       _cx_df = cx.read_sql(DB_URI, stmt, return_type="pandas")
+   120     98.0 MiB      0.0 MiB           1       stmt = "select * from test_table"
+   121                                         
+   122    359.9 MiB    261.9 MiB           1       _cx_df = cx.read_sql(DB_URI, stmt, return_type="pandas")
    123                                         
-   124    363.0 MiB      0.0 MiB           1       with Database(DB_URI) as con:
-   125    622.6 MiB    259.6 MiB           1           data = read_sql(stmt, con, n_rows=1_000_000)
-   126    638.1 MiB     15.5 MiB           1           _flaco_df = pd.DataFrame(data, copy=False)
+   124    359.9 MiB      0.0 MiB           1       with Database(DB_URI) as con:
+   125    545.4 MiB    185.4 MiB           1           data = read_sql(stmt, con)
+   126    553.5 MiB      8.2 MiB           1           _flaco_df = pd.DataFrame(data, copy=False)
    127                                         
-   128    642.8 MiB      4.7 MiB           1       engine = create_engine(DB_URI)
-   129   1798.3 MiB   1155.5 MiB           1       _pandas_df = pd.read_sql(stmt, engine)
+   128    557.8 MiB      4.3 MiB           1       engine = create_engine(DB_URI)
+   129   1681.0 MiB   1123.2 MiB           1       _pandas_df = pd.read_sql(stmt, engine)
 ```
 
 ---
@@ -86,9 +86,8 @@ Connectorx is an _exceptionally_ impressive library, and more mature than flaco.
 They have much wider support for a range of data sources, while flaco only 
 supports postgres for now.
 
-Performance wise, benchmarking seems to indicate flaco is more performant in most (all?)
-datatypes aside from temporal types (datetime, date, time), where Connectorx seems to
-perform better.
+Performance wise, benchmarking seems to indicate flaco is generally more performant
+in terms of memory, but connectorx is faster.
 
 Connectorx [will make precheck queries](https://github.com/sfu-db/connector-x#how-does-connectorx-download-the-data)
 to the source before starting to download data. Depending on your application,
@@ -99,6 +98,9 @@ the source database.
 Flaco will not run _any_ precheck queries. _However_, you can supply either
 `n_rows` or `size_hint` to `flaco.io.read_sql` to give either exact, or a
 hint to reduce the number of allocations/resizing of arrays during data loading.
+
+When in doubt, it's likely you should choose connectorx as it's more mature and
+offers great performance.
 
 # Words of caution
 

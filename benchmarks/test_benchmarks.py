@@ -117,17 +117,16 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
 
 @profile
 def memory_profile():
-    stmt = "select col1, col2, col3, col4, col5, col6 from test_table"
+    stmt = "select * from test_table"
 
     _cx_df = cx.read_sql(DB_URI, stmt, return_type="pandas")
 
     with Database(DB_URI) as con:
-        data = read_sql(stmt, con, n_rows=1_000_000)
+        data = read_sql(stmt, con)
         _flaco_df = pd.DataFrame(data, copy=False)
 
     engine = create_engine(DB_URI)
     _pandas_df = pd.read_sql(stmt, engine)
-    #breakpoint()
 
 
 if __name__ == "__main__":

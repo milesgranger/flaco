@@ -8,6 +8,8 @@ use std::ffi::CString;
 use std::net::IpAddr;
 use std::os::raw::c_char;
 use std::{ffi, mem};
+use std::error::Error;
+use postgres::types::{FromSql, Type};
 use time;
 
 type DatabasePtr = *mut u32;
@@ -159,9 +161,18 @@ impl From<&mut CString> for StringPtr {
 #[derive(Debug)]
 #[repr(C)]
 pub struct DateInfo {
-    year: i32,
-    month: u8,
-    day: u8,
+    /// The value represents the number of days since January 1st, 2000.
+    offset: i32
+}
+
+impl FromSql<'_> for DateInfo {
+    fn from_sql(_: &Type, raw: &[u8]) -> std::result::Result<Self, Box<dyn Error + Sync + Send>> {
+        let offset = postgres_protocol::types::date_from_sql(raw)?;
+        Ok(Self { offset })
+    }
+    fn accepts(ty: &Type) -> bool {
+        ty == &Type::DATE
+    }
 }
 
 #[derive(Debug)]
@@ -173,28 +184,35 @@ pub struct TimeInfo {
     usecond: u32,
 }
 
+impl FromSql<'_> for TimeInfo {
+    fn from_sql(ty: &Type, raw: &[u8]) -> std::result::Result<Self, Box<dyn Error + Sync + Send>> {
+        let t = time::Time::from_sql(ty, raw)?;
+        Ok(Self {
+            hour: t.hour(),
+            minute: t.minute(),
+            second: t.second(),
+            usecond: t.microsecond(),
+        })
+    }
+    fn accepts(ty: &Type) -> bool {
+        ty == &Type::TIME
+    }
+}
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct DateTimeInfo {
-    date: DateInfo,
-    time: TimeInfo,
+    /// The value represents the number of microseconds since midnight, January 1st, 2000.
+    offset: i64
 }
-
-#[derive(Debug)]
-#[repr(C)]
-pub struct TzInfo {
-    hours: i8,
-    minutes: i8,
-    seconds: i8,
-    is_positive: bool,
-}
-
-#[derive(Debug)]
-#[repr(C)]
-pub struct DateTimeTzInfo {
-    date: DateInfo,
-    time: TimeInfo,
-    tz: TzInfo,
+impl FromSql<'_> for DateTimeInfo {
+    fn from_sql(_: &Type, raw: &[u8]) -> std::result::Result<Self, Box<dyn Error + Sync + Send>> {
+        let offset = postgres_protocol::types::timestamp_from_sql(raw)?;
+        Ok(Self { offset })
+    }
+    fn accepts(ty: &Type) -> bool {
+        ty == &Type::TIMESTAMP || ty == &Type::TIMESTAMPTZ
+    }
 }
 
 #[derive(Debug)]
@@ -203,7 +221,6 @@ pub enum Data {
     Bytes(*mut BytesPtr),
     Date(*mut DateInfo),
     DateTime(*mut DateTimeInfo),
-    DateTimeTz(*mut DateTimeTzInfo),
     Time(*mut TimeInfo),
     Boolean(*mut bool),
     Decimal(*mut f64), // TODO: support lossless decimal/numeric type handling
@@ -241,28 +258,10 @@ simple_from!(f64, Float64);
 simple_from!(f32, Float32);
 simple_from!(DateInfo, Date);
 simple_from!(DateTimeInfo, DateTime);
-simple_from!(DateTimeTzInfo, DateTimeTz);
 simple_from!(TimeInfo, Time);
 simple_from!(BytesPtr, Bytes);
 simple_from!(StringPtr, String);
 
-#[inline(always)]
-fn month_to_u8(month: time::Month) -> u8 {
-    match month {
-        time::Month::January => 1,
-        time::Month::February => 2,
-        time::Month::March => 3,
-        time::Month::April => 4,
-        time::Month::May => 5,
-        time::Month::June => 6,
-        time::Month::July => 7,
-        time::Month::August => 8,
-        time::Month::September => 9,
-        time::Month::October => 10,
-        time::Month::November => 11,
-        time::Month::December => 12,
-    }
-}
 
 #[no_mangle]
 pub extern "C" fn free_db(ptr: DatabasePtr) {
@@ -388,68 +387,17 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr, bump: &mut Bump) -> R
                 .map(|v| bump.alloc(CString::new(v).unwrap()))
                 .map(|v| bump.alloc(v.into()) as *mut StringPtr)
                 .into(),
-            "timestamp" => row
-                .get::<_, Option<time::PrimitiveDateTime>>(i)
-                .map(|t| {
-                    bump.alloc(DateTimeInfo {
-                        date: DateInfo {
-                            year: t.year(),
-                            month: month_to_u8(t.month()),
-                            day: t.day(),
-                        },
-                        time: TimeInfo {
-                            hour: t.hour(),
-                            minute: t.minute(),
-                            second: t.second(),
-                            usecond: t.microsecond(),
-                        },
-                    }) as *mut DateTimeInfo
-                })
-                .into(),
-            "timestamp with time zone" | "timestamptz" => row
-                .get::<_, Option<time::OffsetDateTime>>(i)
-                .map(|t| {
-                    bump.alloc(DateTimeTzInfo {
-                        date: DateInfo {
-                            year: t.year() as _,
-                            month: month_to_u8(t.month()),
-                            day: t.day(),
-                        },
-                        time: TimeInfo {
-                            hour: t.hour(),
-                            minute: t.minute(),
-                            second: t.second(),
-                            usecond: t.microsecond(),
-                        },
-                        tz: TzInfo {
-                            hours: t.offset().whole_hours(),
-                            minutes: t.offset().minutes_past_hour(),
-                            seconds: t.offset().seconds_past_minute(),
-                            is_positive: t.offset().is_positive(),
-                        },
-                    }) as *mut DateTimeTzInfo
-                })
+            "timestamp" | "timestamp with time zone" | "timestamptz" => row
+                .get::<_, Option<DateTimeInfo>>(i)
+                .map(|t| bump.alloc(t) as *mut DateTimeInfo)
                 .into(),
             "date" => row
-                .get::<_, Option<time::Date>>(i)
-                .map(|t| {
-                    bump.alloc(DateInfo {
-                        year: t.year() as _,
-                        month: month_to_u8(t.month()),
-                        day: t.day(),
-                    }) as *mut DateInfo
-                })
+                .get::<_, Option<DateInfo>>(i)
+                .map(|v| bump.alloc(v) as *mut DateInfo)
                 .into(),
             "time" => row
-                .get::<_, Option<time::Time>>(i)
-                .map(|t| {
-                    bump.alloc(TimeInfo {
-                        hour: t.hour(),
-                        minute: t.minute(),
-                        second: t.second(),
-                        usecond: t.microsecond(),
-                    }) as *mut TimeInfo
-                })
+                .get::<_, Option<TimeInfo>>(i)
+                .map(|t| bump.alloc(t) as *mut TimeInfo)
                 .into(),
             "json" | "jsonb" => row
                 .get::<_, Option<serde_json::Value>>(i)

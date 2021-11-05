@@ -17,6 +17,10 @@ cdef extern from "Python.h":
     object PyUnicode_InternFromString(char *v)
 
 
+cdef:
+    DATE_01_JAN_2000 = np.datetime64('2000-01-01', 'D')
+    DATETIME_MID_NIGHT_01_JAN_2000 = np.datetime64('2000-01-01T00:00:00', 'us')
+
 cpdef dict read_sql(str stmt, Database db, int n_rows=-1, int size_hint=-1):
     cdef:
         bytes stmt_bytes = stmt.encode("utf-8")
@@ -150,11 +154,9 @@ cdef np.ndarray array_init(lib.Data data, int len):
     elif data.tag == lib.Data_Tag.Null:
         array = np.empty(shape=len, dtype=object)
     elif data.tag == lib.Data_Tag.Date:
-        array = np.empty(shape=len, dtype=dt.date)
+        array = np.empty(shape=len, dtype="datetime64[D]")
     elif data.tag == lib.Data_Tag.DateTime:
-        array = np.empty(shape=len, dtype=dt.datetime)
-    elif data.tag == lib.Data_Tag.DateTimeTz:
-        array = np.empty(shape=len, dtype=dt.datetime)
+        array = np.empty(shape=len, dtype="datetime64[us]")
     elif data.tag == lib.Data_Tag.Time:
         array = np.empty(shape=len, dtype=dt.time)
     else:
@@ -163,14 +165,11 @@ cdef np.ndarray array_init(lib.Data data, int len):
 
 
 cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
-    cdef np.ndarray[np.uint8_t, ndim=1] arr_bytes
-    cdef np.npy_intp intp
-    cdef dt.timedelta delta
-    cdef object tzinfo
     cdef:
+        np.ndarray[np.uint8_t, ndim=1] arr_bytes
+        np.npy_intp intp
         lib.DateInfo date_
         lib.DateTimeInfo datetime_
-        lib.DateTimeTzInfo datetimetz_
         lib.TimeInfo time_
 
     if data.tag == lib.Data_Tag.Boolean:
@@ -207,46 +206,11 @@ cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
 
     elif data.tag == lib.Data_Tag.Date:
         date_ = deref(data.date._0)
-        arr[idx] = dt.date_new(
-            date_.year,
-            date_.month,
-            date_.day
-        )
+        arr[idx] = DATE_01_JAN_2000 + np.timedelta64(date_.offset, 'D')
 
     elif data.tag == lib.Data_Tag.DateTime:
         datetime_ = deref(data.date_time._0)
-        arr[idx] = dt.datetime_new(
-            datetime_.date.year,
-            datetime_.date.month,
-            datetime_.date.day,
-            datetime_.time.hour,
-            datetime_.time.minute,
-            datetime_.time.second,
-            datetime_.time.usecond,
-            None
-        )
-
-    elif data.tag == lib.Data_Tag.DateTimeTz:
-        datetimetz_ = deref(data.date_time_tz._0)
-        delta = dt.timedelta_new(
-            datetimetz_.tz.hours,
-            datetimetz_.tz.minutes,
-            datetimetz_.tz.seconds
-        )
-        if data.date_time_tz._0.tz.is_positive:
-            tzinfo = dt.timezone(delta)
-        else:
-            tzinfo = dt.timezone(-delta)
-        arr[idx] = dt.datetime_new(
-            datetimetz_.date.year,
-            datetimetz_.date.month,
-            datetimetz_.date.day,
-            datetimetz_.time.hour,
-            datetimetz_.time.minute,
-            datetimetz_.time.second,
-            datetimetz_.time.usecond,
-            tzinfo
-        )
+        arr[idx] = DATETIME_MID_NIGHT_01_JAN_2000 + np.timedelta64(datetime_.offset, 'us')
 
     elif data.tag == lib.Data_Tag.Time:
         time_ = deref(data.time._0)
