@@ -47,46 +47,46 @@ cdef extern from "./flaco.h":
     ctypedef char *Exception;
 
     ctypedef struct Bytes_Body:
-        BytesPtr *_0
+        BytesPtr _0
 
     ctypedef struct Boolean_Body:
-        bool *_0
+        bool _0
 
     ctypedef struct Date_Body:
-        DateInfo *_0
+        DateInfo _0
 
     ctypedef struct DateTime_Body:
-        DateTimeInfo *_0
+        DateTimeInfo _0
 
     ctypedef struct Time_Body:
-        TimeInfo *_0
+        TimeInfo _0
 
     ctypedef struct Decimal_Body:
-        np.float64_t *_0
+        np.float64_t _0
 
     ctypedef struct Int8_Body:
-        np.int8_t *_0
+        np.int8_t _0
 
     ctypedef struct Int16_Body:
-        np.int16_t *_0
+        np.int16_t _0
 
     ctypedef struct Uint32_Body:
-        np.uint32_t *_0
+        np.uint32_t _0
 
     ctypedef struct Int32_Body:
-        np.int32_t *_0
+        np.int32_t _0
 
     ctypedef struct Int64_Body:
-        np.int64_t *_0
+        np.int64_t _0
 
     ctypedef struct Float32_Body:
-        np.float32_t *_0
+        np.float32_t _0
 
     ctypedef struct Float64_Body:
-        np.float64_t *_0
+        np.float64_t _0
 
     ctypedef struct String_Body:
-        StringPtr *_0
+        StringPtr _0
 
     ctypedef struct Data:
         Data_Tag tag
@@ -115,8 +115,7 @@ cdef extern from "./flaco.h":
     DatabasePtr db_create(char *uri_ptr)
     void db_connect(DatabasePtr ptr, Exception *exc)
     void db_disconnect(DatabasePtr ptr)
-    SessionPtr init_session()
-    void free_session(SessionPtr session)
+
     RowIteratorPtr read_sql(const char *stmt_ptr, DatabasePtr db_ptr, Exception *exc)
 
     void free_db(DatabasePtr ptr)
@@ -126,7 +125,6 @@ cdef extern from "./flaco.h":
             RowDataArrayPtr *row_ptr,
             np.uint32_t *n_columns,
             RowColumnNamesArrayPtr *column_names,
-            SessionPtr *session,
             Exception *exc
     )
 

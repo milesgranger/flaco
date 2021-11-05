@@ -1,5 +1,4 @@
 //#![warn(missing_docs)]
-use bumpalo::Bump;
 use postgres as pg;
 use postgres::fallible_iterator::FallibleIterator;
 use postgres::RowIter;
@@ -17,21 +16,8 @@ type RowIteratorPtr = *mut u32;
 type RowDataArrayPtr = *mut u32;
 type RowColumnNamesArrayPtr = *mut *mut c_char;
 type Exception = *mut c_char;
-type SessionPtr = *mut u32;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-
-
-#[no_mangle]
-pub extern "C" fn init_session() -> SessionPtr {
-    Box::into_raw(Box::new(Bump::new())) as SessionPtr
-}
-
-#[no_mangle]
-pub extern "C" fn free_session(session: SessionPtr) {
-    let mut bump = unsafe { Box::from_raw(session as *mut Bump) };
-    bump.reset();
-}
 
 /// Supports creating connections to a given connection URI
 pub struct Database {
@@ -133,8 +119,8 @@ pub struct BytesPtr {
     pub len: u32,
 }
 
-impl From<&mut Vec<u8>> for BytesPtr {
-    fn from(v: &mut Vec<u8>) -> Self {
+impl From<Vec<u8>> for BytesPtr {
+    fn from(mut v: Vec<u8>) -> Self {
         v.shrink_to_fit();
         let ptr = v.as_ptr() as _;
         let len = v.len() as u32;
@@ -150,10 +136,10 @@ pub struct StringPtr {
     pub len: u32,
 }
 
-impl From<&mut CString> for StringPtr {
-    fn from(cstring: &mut CString) -> Self {
+impl From<CString> for StringPtr {
+    fn from(cstring: CString) -> Self {
         let len = cstring.as_bytes().len() as _;
-        let ptr = cstring.as_ptr() as _;
+        let ptr = cstring.into_raw() as _;
         StringPtr { ptr, len }
     }
 }
@@ -218,27 +204,27 @@ impl FromSql<'_> for DateTimeInfo {
 #[derive(Debug)]
 #[repr(C)]
 pub enum Data {
-    Bytes(*mut BytesPtr),
-    Date(*mut DateInfo),
-    DateTime(*mut DateTimeInfo),
-    Time(*mut TimeInfo),
-    Boolean(*mut bool),
-    Decimal(*mut f64), // TODO: support lossless decimal/numeric type handling
-    Int8(*mut i8),
-    Int16(*mut i16),
-    Int32(*mut i32),
-    Uint32(*mut u32),
-    Int64(*mut i64),
-    Float32(*mut f32),
-    Float64(*mut f64),
-    String(*mut StringPtr),
+    Bytes(BytesPtr),
+    Date(DateInfo),
+    DateTime(DateTimeInfo),
+    Time(TimeInfo),
+    Boolean(bool),
+    Decimal(f64), // TODO: support lossless decimal/numeric type handling
+    Int8(i8),
+    Int16(i16),
+    Int32(i32),
+    Uint32(u32),
+    Int64(i64),
+    Float32(f32),
+    Float64(f64),
+    String(StringPtr),
     Null,
 }
 
 macro_rules! simple_from {
     ($t:ty, $i:ident) => {
-        impl From<Option<*mut $t>> for Data {
-            fn from(val: Option<*mut $t>) -> Self {
+        impl From<Option<$t>> for Data {
+            fn from(val: Option<$t>) -> Self {
                 match val {
                     Some(v) => Data::$i(v),
                     None => Data::Null,
@@ -279,11 +265,9 @@ pub extern "C" fn next_row(
     row_data_array_ptr: &mut RowDataArrayPtr,
     n_columns: &mut u32,
     column_names: &mut RowColumnNamesArrayPtr,
-    session: &mut SessionPtr,
     exc: &mut Exception,
 ) {
     let mut row_iter = unsafe { Box::from_raw(*row_iter_ptr as *mut RowIter) };
-    let mut bump = unsafe { Box::from_raw(*session as *mut Bump) };
     match row_iter.next() {
         Ok(maybe_row) => match maybe_row {
             Some(row) => {
@@ -294,7 +278,7 @@ pub extern "C" fn next_row(
                     *&mut *column_names = row_column_names(&row) as _;
                     *n_columns = row.len() as _;
                 }
-                if let Err(err) = row_data(row, row_data_array_ptr, &mut bump) {
+                if let Err(err) = row_data(row, row_data_array_ptr) {
                     string_into_exception(err, exc);
                     let len = *n_columns;
                     free_row_data_array(row_data_array_ptr, len);
@@ -318,7 +302,6 @@ pub extern "C" fn next_row(
         }
     };
     mem::forget(row_iter);
-    mem::forget(bump);
 }
 
 pub fn init_row_data_array(row: &pg::Row) -> RowDataArrayPtr {
@@ -333,11 +316,10 @@ pub fn init_row_data_array(row: &pg::Row) -> RowDataArrayPtr {
     ptr as _
 }
 
-fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr, bump: &mut Bump) -> Result<()> {
+fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
     let mut values = unsafe { Vec::from_raw_parts(*array_ptr as _, row.len(), row.len()) };
     assert_eq!(values.len(), values.capacity());
     assert_eq!(values.len(), row.len());
-    bump.reset();
     for i in 0..row.len() {
         let type_ = row.columns()[i].type_();
         // TODO: postgres-types: expose Inner enum which these variations
@@ -345,80 +327,67 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr, bump: &mut Bump) -> R
         let value: Data = match type_.name() {
             "bytea" => row
                 .get::<_, Option<Vec<u8>>>(i)
-                .map(|v| bump.alloc(v))
-                .map(|v| bump.alloc(v.into()) as *mut BytesPtr)
+                .map(BytesPtr::from)
                 .into(),
             "char" => row
                 .get::<_, Option<i8>>(i)
-                .map(|v| bump.alloc(v) as *mut i8)
                 .into(),
             "smallint" | "smallserial" | "int2" => row
                 .get::<_, Option<i16>>(i)
-                .map(|v| bump.alloc(v) as *mut i16)
                 .into(),
             "oid" => row
                 .get::<_, Option<u32>>(i)
-                .map(|v| bump.alloc(v) as *mut u32)
                 .into(),
             "int4" | "int" | "serial" => row
                 .get::<_, Option<i32>>(i)
-                .map(|v| bump.alloc(v) as *mut i32)
                 .into(),
             "bigint" | "int8" | "bigserial" => row
                 .get::<_, Option<i64>>(i)
-                .map(|v| bump.alloc(v) as *mut i64)
                 .into(),
             "bool" => row
                 .get::<_, Option<bool>>(i)
-                .map(|v| bump.alloc(v) as *mut bool)
                 .into(),
             "double precision" | "float8" => row
                 .get::<_, Option<f64>>(i)
                 .or_else(|| Some(f64::NAN))
-                .map(|v| bump.alloc(v) as *mut f64)
                 .into(),
             "real" | "float4" => row
                 .get::<_, Option<f32>>(i)
                 .or_else(|| Some(f32::NAN))
-                .map(|v| bump.alloc(v) as *mut f32)
                 .into(),
             "varchar" | "char(n)" | "text" | "citext" | "name" | "unknown" | "bpchar" => row
                 .get::<_, Option<String>>(i)
-                .map(|v| bump.alloc(CString::new(v).unwrap()))
-                .map(|v| bump.alloc(v.into()) as *mut StringPtr)
+                .map(|v| CString::new(v).unwrap())
+                .map(StringPtr::from)
                 .into(),
             "timestamp" | "timestamp with time zone" | "timestamptz" => row
                 .get::<_, Option<DateTimeInfo>>(i)
-                .map(|t| bump.alloc(t) as *mut DateTimeInfo)
                 .into(),
             "date" => row
                 .get::<_, Option<DateInfo>>(i)
-                .map(|v| bump.alloc(v) as *mut DateInfo)
                 .into(),
             "time" => row
                 .get::<_, Option<TimeInfo>>(i)
-                .map(|t| bump.alloc(t) as *mut TimeInfo)
                 .into(),
             "json" | "jsonb" => row
                 .get::<_, Option<serde_json::Value>>(i)
-                .map(|v| bump.alloc(CString::new(v.to_string()).unwrap()))
-                .map(|v| bump.alloc(v.into()) as *mut StringPtr)
+                .map(|v| CString::new(v.to_string()).unwrap())
+                .map(StringPtr::from)
                 .into(),
             "uuid" => row
                 .get::<_, Option<uuid::Uuid>>(i)
-                .map(|u| bump.alloc(CString::new(u.to_string()).unwrap()))
-                .map(|u| bump.alloc(u.into()) as *mut StringPtr)
+                .map(|u| CString::new(u.to_string()).unwrap())
+                .map(StringPtr::from)
                 .into(),
             "inet" => row
                 .get::<_, Option<IpAddr>>(i)
-                .map(|i| bump.alloc(CString::new(i.to_string()).unwrap()))
-                .map(|i| bump.alloc(i.into()) as *mut StringPtr)
+                .map(|i| CString::new(i.to_string()).unwrap())
+                .map(StringPtr::from)
                 .into(),
             "numeric" => row
                 .get::<_, Option<Decimal>>(i)
                 .map(|v| v.to_f64().unwrap_or_else(|| f64::NAN))
                 .or_else(|| Some(f64::NAN))
-                .map(|v| bump.alloc(v) as *mut f64)
                 .into(),
             _ => {
                 let msg = format!(
