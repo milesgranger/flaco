@@ -18,8 +18,8 @@ cdef extern from "Python.h":
 
 
 cdef:
-    DATE_01_JAN_2000 = np.datetime64('2000-01-01', 'D')
-    DATETIME_MID_NIGHT_01_JAN_2000 = np.datetime64('2000-01-01T00:00:00', 'us')
+    np.int64_t DATE_01_JAN_2000 = np.datetime64('2000-01-01', 'D').astype(np.int64)
+    np.int64_t DATETIME_MID_NIGHT_01_JAN_2000 = np.datetime64('2000-01-01T00:00:00', 'us').astype(np.int64)
 
 cpdef dict read_sql(str stmt, Database db, int n_rows=-1, int size_hint=-1):
     cdef:
@@ -198,10 +198,16 @@ cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         free(data.string._0.ptr)
 
     elif data.tag == lib.Data_Tag.Date:
-        arr[idx] = DATE_01_JAN_2000 + np.timedelta64(data.date._0.offset, 'D')
+        arr[idx] = np.timedelta64(
+            DATE_01_JAN_2000 + data.date._0.offset,
+            'D'
+        )
 
     elif data.tag == lib.Data_Tag.DateTime:
-        arr[idx] = DATETIME_MID_NIGHT_01_JAN_2000 + np.timedelta64(data.date_time._0.offset, 'us')
+        arr[idx] = np.timedelta64(
+            DATETIME_MID_NIGHT_01_JAN_2000 + data.date_time._0.offset,
+            'us'
+        )
 
     elif data.tag == lib.Data_Tag.Time:
         arr[idx] = dt.time_new(
