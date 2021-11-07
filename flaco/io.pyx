@@ -17,6 +17,10 @@ cdef extern from "Python.h":
     object PyUnicode_InternFromString(char *v)
 
 
+cdef:
+    np.int64_t DATE_01_JAN_2000 = np.datetime64('2000-01-01', 'D').astype(np.int64)
+    np.int64_t DATETIME_MID_NIGHT_01_JAN_2000 = np.datetime64('2000-01-01T00:00:00', 'us').astype(np.int64)
+
 cpdef dict read_sql(str stmt, Database db, int n_rows=-1, int size_hint=-1):
     cdef:
         bytes stmt_bytes = stmt.encode("utf-8")
@@ -33,7 +37,13 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1, int size_hint=-1):
         raise FlacoException(exc.decode())
 
     # Read first row
-    lib.next_row(&row_iterator, &row_data_array_ptr, &n_columns, &column_names, &exc)
+    lib.next_row(
+        &row_iterator,
+        &row_data_array_ptr,
+        &n_columns,
+        &column_names,
+        &exc
+    )
     if exc != NULL:
         raise FlacoException(exc.decode())
 
@@ -82,7 +92,13 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1, int size_hint=-1):
 
             row_idx += one
 
-            lib.next_row(&row_iterator, &row_data_array_ptr, &n_columns, &column_names, &exc)
+            lib.next_row(
+                &row_iterator,
+                &row_data_array_ptr,
+                &n_columns,
+                &column_names,
+                &exc
+            )
             if exc != NULL:
                 raise FlacoException(exc.decode())
 
@@ -90,7 +106,6 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1, int size_hint=-1):
     if _n_rows == -1 and current_array_len != row_idx:
         for i in range(0, n_columns):
             resize(output[i], row_idx)
-
     return {columns[i]: output[i] for i in range(n_columns)}
 
 cdef int resize(np.ndarray arr, int len) except -1:
@@ -135,11 +150,9 @@ cdef np.ndarray array_init(lib.Data data, int len):
     elif data.tag == lib.Data_Tag.Null:
         array = np.empty(shape=len, dtype=object)
     elif data.tag == lib.Data_Tag.Date:
-        array = np.empty(shape=len, dtype=dt.date)
+        array = np.empty(shape=len, dtype="datetime64[D]")
     elif data.tag == lib.Data_Tag.DateTime:
-        array = np.empty(shape=len, dtype=dt.datetime)
-    elif data.tag == lib.Data_Tag.DateTimeTz:
-        array = np.empty(shape=len, dtype=dt.datetime)
+        array = np.empty(shape=len, dtype="datetime64[us]")
     elif data.tag == lib.Data_Tag.Time:
         array = np.empty(shape=len, dtype=dt.time)
     else:
@@ -148,10 +161,9 @@ cdef np.ndarray array_init(lib.Data data, int len):
 
 
 cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
-    cdef np.ndarray[np.uint8_t, ndim=1] arr_bytes
-    cdef np.npy_intp intp
-    cdef dt.timedelta delta
-    cdef object tzinfo
+    cdef:
+        np.ndarray[np.uint8_t, ndim=1] arr_bytes
+        np.npy_intp intp
 
     if data.tag == lib.Data_Tag.Boolean:
         arr[idx] = data.boolean._0
@@ -186,43 +198,15 @@ cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         free(data.string._0.ptr)
 
     elif data.tag == lib.Data_Tag.Date:
-        arr[idx] = dt.date_new(
-            data.date._0.year,
-            data.date._0.month,
-            data.date._0.day
+        arr[idx] = np.timedelta64(
+            DATE_01_JAN_2000 + data.date._0.offset,
+            'D'
         )
 
     elif data.tag == lib.Data_Tag.DateTime:
-        arr[idx] = dt.datetime_new(
-            data.date_time._0.date.year,
-            data.date_time._0.date.month,
-            data.date_time._0.date.day,
-            data.date_time._0.time.hour,
-            data.date_time._0.time.minute,
-            data.date_time._0.time.second,
-            data.date_time._0.time.usecond,
-            None
-        )
-
-    elif data.tag == lib.Data_Tag.DateTimeTz:
-        delta = dt.timedelta_new(
-            data.date_time_tz._0.tz.hours,
-            data.date_time_tz._0.tz.minutes,
-            data.date_time_tz._0.tz.seconds
-        )
-        if data.date_time_tz._0.tz.is_positive:
-            tzinfo = dt.timezone(delta)
-        else:
-            tzinfo = dt.timezone(-delta)
-        arr[idx] = dt.datetime_new(
-            data.date_time_tz._0.date.year,
-            data.date_time_tz._0.date.month,
-            data.date_time_tz._0.date.day,
-            data.date_time_tz._0.time.hour,
-            data.date_time_tz._0.time.minute,
-            data.date_time_tz._0.time.second,
-            data.date_time_tz._0.time.usecond,
-            tzinfo
+        arr[idx] = np.timedelta64(
+            DATETIME_MID_NIGHT_01_JAN_2000 + data.date_time._0.offset,
+            'us'
         )
 
     elif data.tag == lib.Data_Tag.Time:

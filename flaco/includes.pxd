@@ -16,9 +16,7 @@ cdef extern from "./flaco.h":
         np.uint32_t len
 
     ctypedef struct DateInfo:
-        np.int8_t year
-        np.uint8_t month
-        np.uint8_t day
+        np.int32_t offset
 
     ctypedef struct TimeInfo:
         np.uint8_t hour
@@ -27,26 +25,13 @@ cdef extern from "./flaco.h":
         np.uint32_t usecond
 
     ctypedef struct DateTimeInfo:
-        DateInfo date
-        TimeInfo time
-
-    ctypedef struct TzInfo:
-        np.int8_t hours
-        np.int8_t minutes
-        np.int8_t seconds
-        bool is_positive
-
-    ctypedef struct DateTimeTzInfo:
-        DateInfo date
-        TimeInfo time
-        TzInfo tz
+        np.int64_t offset
 
     ctypedef enum Data_Tag:
         Bytes
         Boolean
         Date
         DateTime
-        DateTimeTz
         Time
         Decimal
         Int8
@@ -72,9 +57,6 @@ cdef extern from "./flaco.h":
 
     ctypedef struct DateTime_Body:
         DateTimeInfo _0
-
-    ctypedef struct DateTimeTz_Body:
-        DateTimeTzInfo _0
 
     ctypedef struct Time_Body:
         TimeInfo _0
@@ -113,7 +95,6 @@ cdef extern from "./flaco.h":
         Boolean_Body boolean
         Date_Body date
         DateTime_Body date_time
-        DateTimeTz_Body date_time_tz
         Time_Body time
         Decimal_Body decimal
         Int8_Body int8
@@ -129,6 +110,7 @@ cdef extern from "./flaco.h":
     ctypedef np.uint32_t *RowIteratorPtr
     ctypedef char **RowColumnNamesArrayPtr
     ctypedef np.uint32_t *RowDataArrayPtr
+    ctypedef np.uint32_t *SessionPtr
 
     DatabasePtr db_create(char *uri_ptr)
     void db_connect(DatabasePtr ptr, Exception *exc)

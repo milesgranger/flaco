@@ -6,36 +6,37 @@
 ![PyPI - Wheel](https://img.shields.io/pypi/wheel/flaco)
 [![Downloads](https://pepy.tech/badge/flaco/month)](https://pepy.tech/project/flaco)
 
-Perhaps the fastest and most memory efficient way to
+Perhaps the fastest* and most memory efficient way to
 pull data from PostgreSQL into [pandas](https://pandas.pydata.org/) 
 and [numpy](https://numpy.org/doc/stable/index.html). 🚀
 
 Have a gander at the initial [benchmarks](./benchmarks) 🏋
 
 flaco tends to use nearly ~3-6x less memory than standard `pandas.read_sql` 
-and about ~3x faster. However, it's probably 50x less stable at the moment. 😜
+and about ~2-3x faster. However, it's probably 50x less stable at the moment. 😜
 
 To whet your appetite, here's a memory profile between flaco, [connectorx](https://github.com/sfu-db/connector-x) 
 and `pandas.read_sql` on a table with 1M rows with columns of various types. 
 (see [test_benchmarks.py](benchmarks/test_benchmarks.py)) *If the data, 
-specifically integer types, has null values, you can expect a bit lower savings than the ~4x 
-you see here; therefore (hot tip 🔥), supply fill values in your queries where possible via `coalesce`.
+specifically integer types, has null values, you can expect a bit lower savings
+what you see here; therefore (hot tip 🔥), supply fill values in your queries 
+where possible via `coalesce`.
 
 ```bash
 Line #    Mem usage    Increment  Occurences   Line Contents
 ============================================================
-   118     98.3 MiB     98.3 MiB           1   @profile
+   118     97.9 MiB     97.9 MiB           1   @profile
    119                                         def memory_profile():
-   120     98.3 MiB      0.0 MiB           1       stmt = "select * from test_table"
-   121                                             # connectorx is a _very_ good alternative with better source support
-   122    363.0 MiB    264.6 MiB           1       _cx_df = cx.read_sql(DB_URI, stmt, return_type="pandas")
+   120     97.9 MiB      0.0 MiB           1       stmt = "select * from test_table"
+   121                                         
+   122    354.9 MiB    257.0 MiB           1       _cx_df = cx.read_sql(DB_URI, stmt, return_type="pandas")
    123                                         
-   124    363.0 MiB      0.0 MiB           1       with Database(DB_URI) as con:
-   125    622.6 MiB    259.6 MiB           1           data = read_sql(stmt, con, n_rows=1_000_000)
-   126    638.1 MiB     15.5 MiB           1           _flaco_df = pd.DataFrame(data, copy=False)
+   124    354.9 MiB      0.0 MiB           1       with Database(DB_URI) as con:
+   125    533.9 MiB    178.9 MiB           1           data = read_sql(stmt, con)
+   126    541.2 MiB      7.3 MiB           1           _flaco_df = pd.DataFrame(data, copy=False)
    127                                         
-   128    642.8 MiB      4.7 MiB           1       engine = create_engine(DB_URI)
-   129   1798.3 MiB   1155.5 MiB           1       _pandas_df = pd.read_sql(stmt, engine)
+   128    545.3 MiB      4.1 MiB           1       engine = create_engine(DB_URI)
+   129   1680.9 MiB   1135.5 MiB           1       _pandas_df = pd.read_sql(stmt, engine)
 ```
 
 ---
@@ -86,9 +87,9 @@ Connectorx is an _exceptionally_ impressive library, and more mature than flaco.
 They have much wider support for a range of data sources, while flaco only 
 supports postgres for now.
 
-Performance wise, benchmarking seems to indicate flaco is more performant in most (all?)
-datatypes aside from temporal types (datetime, date, time), where Connectorx seems to
-perform better.
+Performance wise, benchmarking seems to indicate flaco is generally more performant
+in terms of memory, but connectorx is faster when temporal data types (time, timestamp, etc)
+are used. If it's pure numeric dtypes, flaco is faster and more memory efficient.
 
 Connectorx [will make precheck queries](https://github.com/sfu-db/connector-x#how-does-connectorx-download-the-data)
 to the source before starting to download data. Depending on your application,
@@ -99,6 +100,9 @@ the source database.
 Flaco will not run _any_ precheck queries. _However_, you can supply either
 `n_rows` or `size_hint` to `flaco.io.read_sql` to give either exact, or a
 hint to reduce the number of allocations/resizing of arrays during data loading.
+
+**When in doubt, it's likely you should choose connectorx as it's more mature and
+offers great performance.**
 
 # Words of caution
 

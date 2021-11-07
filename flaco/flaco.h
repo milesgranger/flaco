@@ -15,10 +15,18 @@ typedef struct {
 } BytesPtr;
 
 typedef struct {
-  int32_t year;
-  uint8_t month;
-  uint8_t day;
+  /**
+   * The value represents the number of days since January 1st, 2000.
+   */
+  int32_t offset;
 } DateInfo;
+
+typedef struct {
+  /**
+   * The value represents the number of microseconds since midnight, January 1st, 2000.
+   */
+  int64_t offset;
+} DateTimeInfo;
 
 typedef struct {
   uint8_t hour;
@@ -26,24 +34,6 @@ typedef struct {
   uint8_t second;
   uint32_t usecond;
 } TimeInfo;
-
-typedef struct {
-  DateInfo date;
-  TimeInfo time;
-} DateTimeInfo;
-
-typedef struct {
-  int8_t hours;
-  int8_t minutes;
-  int8_t seconds;
-  bool is_positive;
-} TzInfo;
-
-typedef struct {
-  DateInfo date;
-  TimeInfo time;
-  TzInfo tz;
-} DateTimeTzInfo;
 
 typedef struct {
   char *ptr;
@@ -54,7 +44,6 @@ typedef enum {
   Bytes,
   Date,
   DateTime,
-  DateTimeTz,
   Time,
   Boolean,
   Decimal,
@@ -80,10 +69,6 @@ typedef struct {
 typedef struct {
   DateTimeInfo _0;
 } DateTime_Body;
-
-typedef struct {
-  DateTimeTzInfo _0;
-} DateTimeTz_Body;
 
 typedef struct {
   TimeInfo _0;
@@ -135,7 +120,6 @@ typedef struct {
     Bytes_Body bytes;
     Date_Body date;
     DateTime_Body date_time;
-    DateTimeTz_Body date_time_tz;
     Time_Body time;
     Boolean_Body boolean;
     Decimal_Body decimal;

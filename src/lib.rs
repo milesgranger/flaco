@@ -7,6 +7,8 @@ use std::ffi::CString;
 use std::net::IpAddr;
 use std::os::raw::c_char;
 use std::{ffi, mem};
+use std::error::Error;
+use postgres::types::{FromSql, Type};
 use time;
 
 type DatabasePtr = *mut u32;
@@ -118,8 +120,7 @@ pub struct BytesPtr {
 }
 
 impl From<Vec<u8>> for BytesPtr {
-    fn from(v: Vec<u8>) -> Self {
-        let mut v = v;
+    fn from(mut v: Vec<u8>) -> Self {
         v.shrink_to_fit();
         let ptr = v.as_ptr() as _;
         let len = v.len() as u32;
@@ -135,12 +136,10 @@ pub struct StringPtr {
     pub len: u32,
 }
 
-impl From<String> for StringPtr {
-    fn from(v: String) -> Self {
-        let cstring = CString::new(v).unwrap();
+impl From<CString> for StringPtr {
+    fn from(cstring: CString) -> Self {
         let len = cstring.as_bytes().len() as _;
-
-        let ptr = cstring.into_raw();
+        let ptr = cstring.into_raw() as _;
         StringPtr { ptr, len }
     }
 }
@@ -148,9 +147,18 @@ impl From<String> for StringPtr {
 #[derive(Debug)]
 #[repr(C)]
 pub struct DateInfo {
-    year: i32,
-    month: u8,
-    day: u8,
+    /// The value represents the number of days since January 1st, 2000.
+    offset: i32
+}
+
+impl FromSql<'_> for DateInfo {
+    fn from_sql(_: &Type, raw: &[u8]) -> std::result::Result<Self, Box<dyn Error + Sync + Send>> {
+        let offset = postgres_protocol::types::date_from_sql(raw)?;
+        Ok(Self { offset })
+    }
+    fn accepts(ty: &Type) -> bool {
+        ty == &Type::DATE
+    }
 }
 
 #[derive(Debug)]
@@ -162,28 +170,35 @@ pub struct TimeInfo {
     usecond: u32,
 }
 
+impl FromSql<'_> for TimeInfo {
+    fn from_sql(ty: &Type, raw: &[u8]) -> std::result::Result<Self, Box<dyn Error + Sync + Send>> {
+        let t = time::Time::from_sql(ty, raw)?;
+        Ok(Self {
+            hour: t.hour(),
+            minute: t.minute(),
+            second: t.second(),
+            usecond: t.microsecond(),
+        })
+    }
+    fn accepts(ty: &Type) -> bool {
+        ty == &Type::TIME
+    }
+}
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct DateTimeInfo {
-    date: DateInfo,
-    time: TimeInfo,
+    /// The value represents the number of microseconds since midnight, January 1st, 2000.
+    offset: i64
 }
-
-#[derive(Debug)]
-#[repr(C)]
-pub struct TzInfo {
-    hours: i8,
-    minutes: i8,
-    seconds: i8,
-    is_positive: bool,
-}
-
-#[derive(Debug)]
-#[repr(C)]
-pub struct DateTimeTzInfo {
-    date: DateInfo,
-    time: TimeInfo,
-    tz: TzInfo,
+impl FromSql<'_> for DateTimeInfo {
+    fn from_sql(_: &Type, raw: &[u8]) -> std::result::Result<Self, Box<dyn Error + Sync + Send>> {
+        let offset = postgres_protocol::types::timestamp_from_sql(raw)?;
+        Ok(Self { offset })
+    }
+    fn accepts(ty: &Type) -> bool {
+        ty == &Type::TIMESTAMP || ty == &Type::TIMESTAMPTZ
+    }
 }
 
 #[derive(Debug)]
@@ -192,7 +207,6 @@ pub enum Data {
     Bytes(BytesPtr),
     Date(DateInfo),
     DateTime(DateTimeInfo),
-    DateTimeTz(DateTimeTzInfo),
     Time(TimeInfo),
     Boolean(bool),
     Decimal(f64), // TODO: support lossless decimal/numeric type handling
@@ -230,46 +244,10 @@ simple_from!(f64, Float64);
 simple_from!(f32, Float32);
 simple_from!(DateInfo, Date);
 simple_from!(DateTimeInfo, DateTime);
-simple_from!(DateTimeTzInfo, DateTimeTz);
 simple_from!(TimeInfo, Time);
+simple_from!(BytesPtr, Bytes);
+simple_from!(StringPtr, String);
 
-impl From<Option<Vec<u8>>> for Data {
-    fn from(val: Option<Vec<u8>>) -> Self {
-        match val {
-            Some(v) => {
-                let ptr = BytesPtr::from(v);
-                Data::Bytes(ptr)
-            }
-            None => Data::Null,
-        }
-    }
-}
-impl From<Option<String>> for Data {
-    fn from(val: Option<String>) -> Self {
-        match val {
-            Some(string) => Data::String(string.into()),
-            None => Data::Null,
-        }
-    }
-}
-
-#[inline(always)]
-fn month_to_u8(month: time::Month) -> u8 {
-    match month {
-        time::Month::January => 1,
-        time::Month::February => 2,
-        time::Month::March => 3,
-        time::Month::April => 4,
-        time::Month::May => 5,
-        time::Month::June => 6,
-        time::Month::July => 7,
-        time::Month::August => 8,
-        time::Month::September => 9,
-        time::Month::October => 10,
-        time::Month::November => 11,
-        time::Month::December => 12,
-    }
-}
 
 #[no_mangle]
 pub extern "C" fn free_db(ptr: DatabasePtr) {
@@ -280,50 +258,6 @@ fn free_row_iter(ptr: &mut RowIteratorPtr) {
     let _ = unsafe { Box::from_raw(*ptr as *mut pg::RowIter) };
     *ptr = std::ptr::null_mut();
 }
-
-trait UpdateInPlace {
-    fn update_in_place(self, data: &mut Data) -> Result<()>;
-}
-
-macro_rules! impl_update_in_place {
-    ($t:ty, $i:ident) => {
-        impl UpdateInPlace for Option<$t> {
-            fn update_in_place(self, data: &mut Data) -> Result<()> {
-                match data {
-                    Data::$i(ptr) => match self {
-                        Some(val) => {
-                            let _ = mem::replace(ptr, val.into());
-                        }
-                        None => mem::swap(data, &mut Data::Null),
-                    },
-                    Data::Null => {
-                        // new allocation if previous iter was Null and now we have data
-                        if self.is_some() {
-                            mem::swap(data, &mut (self.into()))
-                        }
-                    }
-                    _ => return Err("Data type mismatch!".into()),
-                }
-                Ok(())
-            }
-        }
-    };
-}
-
-impl_update_in_place!(bool, Boolean);
-impl_update_in_place!(i8, Int8);
-impl_update_in_place!(i16, Int16);
-impl_update_in_place!(i32, Int32);
-impl_update_in_place!(u32, Uint32);
-impl_update_in_place!(i64, Int64);
-impl_update_in_place!(f64, Float64);
-impl_update_in_place!(f32, Float32);
-impl_update_in_place!(DateInfo, Date);
-impl_update_in_place!(DateTimeInfo, DateTime);
-impl_update_in_place!(DateTimeTzInfo, DateTimeTz);
-impl_update_in_place!(TimeInfo, Time);
-impl_update_in_place!(Vec<u8>, Bytes);
-impl_update_in_place!(String, String);
 
 #[no_mangle]
 pub extern "C" fn next_row(
@@ -387,124 +321,74 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
     assert_eq!(values.len(), values.capacity());
     assert_eq!(values.len(), row.len());
     for i in 0..row.len() {
-        let current_value = &mut values[i];
         let type_ = row.columns()[i].type_();
         // TODO: postgres-types: expose Inner enum which these variations
         // and have postgres Row.type/(or something) expose the variant
-        match type_.name() {
+        let value: Data = match type_.name() {
             "bytea" => row
                 .get::<_, Option<Vec<u8>>>(i)
-                .update_in_place(current_value)?,
-            "char" => row.get::<_, Option<i8>>(i).update_in_place(current_value)?,
+                .map(BytesPtr::from)
+                .into(),
+            "char" => row
+                .get::<_, Option<i8>>(i)
+                .into(),
             "smallint" | "smallserial" | "int2" => row
                 .get::<_, Option<i16>>(i)
-                .update_in_place(current_value)?,
+                .into(),
             "oid" => row
                 .get::<_, Option<u32>>(i)
-                .update_in_place(current_value)?,
+                .into(),
             "int4" | "int" | "serial" => row
                 .get::<_, Option<i32>>(i)
-                .update_in_place(current_value)?,
+                .into(),
             "bigint" | "int8" | "bigserial" => row
                 .get::<_, Option<i64>>(i)
-                .update_in_place(current_value)?,
+                .into(),
             "bool" => row
                 .get::<_, Option<bool>>(i)
-                .update_in_place(current_value)?,
-            "double precision" | "float8" => {
-                row.get::<_, Option<f64>>(i)
-                    .or_else(|| Some(f64::NAN))
-                    .update_in_place(current_value)?;
-            }
-            "real" | "float4" => {
-                row.get::<_, Option<f32>>(i)
-                    .or_else(|| Some(f32::NAN))
-                    .update_in_place(current_value)?;
-            }
-            "varchar" | "char(n)" | "text" | "citext" | "name" | "unknown" | "bpchar" => {
-                row.get::<_, Option<String>>(i)
-                    .update_in_place(current_value)?;
-            }
-            "timestamp" => {
-                row.get::<_, Option<time::PrimitiveDateTime>>(i)
-                    .map(|t| DateTimeInfo {
-                        date: DateInfo {
-                            year: t.year(),
-                            month: month_to_u8(t.month()),
-                            day: t.day(),
-                        },
-                        time: TimeInfo {
-                            hour: t.hour(),
-                            minute: t.minute(),
-                            second: t.second(),
-                            usecond: t.microsecond(),
-                        },
-                    })
-                    .update_in_place(current_value)?;
-            }
-            "timestamp with time zone" | "timestamptz" => {
-                row.get::<_, Option<time::OffsetDateTime>>(i)
-                    .map(|t| DateTimeTzInfo {
-                        date: DateInfo {
-                            year: t.year() as _,
-                            month: month_to_u8(t.month()),
-                            day: t.day(),
-                        },
-                        time: TimeInfo {
-                            hour: t.hour(),
-                            minute: t.minute(),
-                            second: t.second(),
-                            usecond: t.microsecond(),
-                        },
-                        tz: TzInfo {
-                            hours: t.offset().whole_hours(),
-                            minutes: t.offset().minutes_past_hour(),
-                            seconds: t.offset().seconds_past_minute(),
-                            is_positive: t.offset().is_positive(),
-                        },
-                    })
-                    .update_in_place(current_value)?;
-            }
-            "date" => {
-                row.get::<_, Option<time::Date>>(i)
-                    .map(|t| DateInfo {
-                        year: t.year() as _,
-                        month: month_to_u8(t.month()),
-                        day: t.day(),
-                    })
-                    .update_in_place(current_value)?;
-            }
-            "time" => {
-                row.get::<_, Option<time::Time>>(i)
-                    .map(|t| TimeInfo {
-                        hour: t.hour(),
-                        minute: t.minute(),
-                        second: t.second(),
-                        usecond: t.microsecond(),
-                    })
-                    .update_in_place(current_value)?;
-            }
-            "json" | "jsonb" => {
-                row.get::<_, Option<serde_json::Value>>(i)
-                    .map(|v| v.to_string())
-                    .update_in_place(current_value)?;
-            }
-            "uuid" => {
-                row.get::<_, Option<uuid::Uuid>>(i)
-                    .map(|u| u.to_string())
-                    .update_in_place(current_value)?;
-            }
-            "inet" => {
-                row.get::<_, Option<IpAddr>>(i)
-                    .map(|i| i.to_string())
-                    .update_in_place(current_value)?;
-            }
-            "numeric" => {
-                row.get::<_, Option<Decimal>>(i)
-                    .map(|v| v.to_f64().unwrap_or_else(|| f64::NAN))
-                    .or_else(|| Some(f64::NAN))
-                    .update_in_place(current_value)?;
-            }
+                .into(),
+            "double precision" | "float8" => row
+                .get::<_, Option<f64>>(i)
+                .or_else(|| Some(f64::NAN))
+                .into(),
+            "real" | "float4" => row
+                .get::<_, Option<f32>>(i)
+                .or_else(|| Some(f32::NAN))
+                .into(),
+            "varchar" | "char(n)" | "text" | "citext" | "name" | "unknown" | "bpchar" => row
+                .get::<_, Option<String>>(i)
+                .map(|v| CString::new(v).unwrap())
+                .map(StringPtr::from)
+                .into(),
+            "timestamp" | "timestamp with time zone" | "timestamptz" => row
+                .get::<_, Option<DateTimeInfo>>(i)
+                .into(),
+            "date" => row
+                .get::<_, Option<DateInfo>>(i)
+                .into(),
+            "time" => row
+                .get::<_, Option<TimeInfo>>(i)
+                .into(),
+            "json" | "jsonb" => row
+                .get::<_, Option<serde_json::Value>>(i)
+                .map(|v| CString::new(v.to_string()).unwrap())
+                .map(StringPtr::from)
+                .into(),
+            "uuid" => row
+                .get::<_, Option<uuid::Uuid>>(i)
+                .map(|u| CString::new(u.to_string()).unwrap())
+                .map(StringPtr::from)
+                .into(),
+            "inet" => row
+                .get::<_, Option<IpAddr>>(i)
+                .map(|i| CString::new(i.to_string()).unwrap())
+                .map(StringPtr::from)
+                .into(),
+            "numeric" => row
+                .get::<_, Option<Decimal>>(i)
+                .map(|v| v.to_f64().unwrap_or_else(|| f64::NAN))
+                .or_else(|| Some(f64::NAN))
+                .into(),
             _ => {
                 let msg = format!(
                     "Unimplemented conversion for: '{}'; consider casting to text",
@@ -514,6 +398,7 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
                 return Err(msg.into());
             }
         };
+        values[i] = value;
     }
     assert_eq!(values.len(), values.capacity());
     assert_eq!(values.len(), row.len());
