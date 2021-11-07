@@ -66,41 +66,37 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1, int size_hint=-1):
         lib.RowDataArrayPtr row_data_ptr
         lib.Data *data
 
-    while True:
-        if row_iterator == NULL:
-            break
-        else:
-
-            if row_idx == 0:
-                # Initialize arrays for output
-                # will resize at `n_increment` if `n_rows` is not set.
-                for i in range(0, n_columns):
-                    data = lib.index_row(row_data_array_ptr, n_columns, i)
-                    output.append(
-                        array_init(deref(data), n_increment if n_rows == -1 else n_rows)
-                    )
-
-            # grow arrays if next insert is passed current len
-            if _n_rows == -1 and current_array_len <= row_idx:
-                    for i in range(0, n_columns):
-                        resize(output[i], current_array_len + n_increment)
-                    current_array_len += n_increment
-
+    while row_iterator != NULL:
+        if row_idx == 0:
+            # Initialize arrays for output
+            # will resize at `n_increment` if `n_rows` is not set.
             for i in range(0, n_columns):
                 data = lib.index_row(row_data_array_ptr, n_columns, i)
-                output[i] = insert_data_into_array(deref(data), output[i], row_idx)
+                output.append(
+                    array_init(deref(data), n_increment if n_rows == -1 else n_rows)
+                )
 
-            row_idx += one
+        # grow arrays if next insert is passed current len
+        if _n_rows == -1 and current_array_len <= row_idx:
+                for i in range(0, n_columns):
+                    resize(output[i], current_array_len + n_increment)
+                current_array_len += n_increment
 
-            lib.next_row(
-                &row_iterator,
-                &row_data_array_ptr,
-                &n_columns,
-                &column_names,
-                &exc
-            )
-            if exc != NULL:
-                raise FlacoException(exc.decode())
+        for i in range(0, n_columns):
+            data = lib.index_row(row_data_array_ptr, n_columns, i)
+            output[i] = insert_data_into_array(deref(data), output[i], row_idx)
+
+        row_idx += one
+
+        lib.next_row(
+            &row_iterator,
+            &row_data_array_ptr,
+            &n_columns,
+            &column_names,
+            &exc
+        )
+        if exc != NULL:
+            raise FlacoException(exc.decode())
 
     # Ensure arrays are correct size; only if n_rows not set
     if _n_rows == -1 and current_array_len != row_idx:

@@ -13,17 +13,13 @@ if os.getenv("RUNNER_OS", "").lower() == "windows":
     libraries.extend(["ntdll", "ws2_32", "bcrypt", "advapi32"])
     flaco_lib_file = flaco_lib_dir.joinpath("flaco.lib")
     extra_link_args = []
-    extra_compile_args = [
-        "/link",
-        "/SUBSYSTEM:WINDOWS",
-    ]
+    extra_compile_args = ["/link", "/SUBSYSTEM:WINDOWS"]
 else:
     flaco_lib_file = flaco_lib_dir.joinpath("libflaco.a")
     extra_link_args = ["-l:libflaco.a"]
     extra_compile_args = ["-fopenmp", "-O3"]
 
 assert flaco_lib_file.is_file(), "flaco lib not built; run 'cargo build --release'"
-
 
 extension = Extension(
     name="*",
@@ -51,7 +47,7 @@ dev_requirements = [
 
 setup(
     name="flaco",
-    version="0.4.2",
+    version="0.5.0",
     author="Miles Granger",
     author_email="miles59923@gmail.com",
     description="Fast and Efficient PostgreSQL data into numpy/pandas",
