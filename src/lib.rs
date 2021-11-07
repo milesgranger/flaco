@@ -1,14 +1,14 @@
 //#![warn(missing_docs)]
 use postgres as pg;
 use postgres::fallible_iterator::FallibleIterator;
+use postgres::types::{FromSql, Type};
 use postgres::RowIter;
 use rust_decimal::prelude::{Decimal, ToPrimitive};
+use std::error::Error;
 use std::ffi::CString;
 use std::net::IpAddr;
 use std::os::raw::c_char;
 use std::{ffi, mem};
-use std::error::Error;
-use postgres::types::{FromSql, Type};
 use time;
 
 type DatabasePtr = *mut u32;
@@ -148,7 +148,7 @@ impl From<CString> for StringPtr {
 #[repr(C)]
 pub struct DateInfo {
     /// The value represents the number of days since January 1st, 2000.
-    offset: i32
+    offset: i32,
 }
 
 impl FromSql<'_> for DateInfo {
@@ -189,7 +189,7 @@ impl FromSql<'_> for TimeInfo {
 #[repr(C)]
 pub struct DateTimeInfo {
     /// The value represents the number of microseconds since midnight, January 1st, 2000.
-    offset: i64
+    offset: i64,
 }
 impl FromSql<'_> for DateTimeInfo {
     fn from_sql(_: &Type, raw: &[u8]) -> std::result::Result<Self, Box<dyn Error + Sync + Send>> {
@@ -247,7 +247,6 @@ simple_from!(DateTimeInfo, DateTime);
 simple_from!(TimeInfo, Time);
 simple_from!(BytesPtr, Bytes);
 simple_from!(StringPtr, String);
-
 
 #[no_mangle]
 pub extern "C" fn free_db(ptr: DatabasePtr) {
@@ -325,28 +324,13 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
         // TODO: postgres-types: expose Inner enum which these variations
         // and have postgres Row.type/(or something) expose the variant
         let value: Data = match type_.name() {
-            "bytea" => row
-                .get::<_, Option<Vec<u8>>>(i)
-                .map(BytesPtr::from)
-                .into(),
-            "char" => row
-                .get::<_, Option<i8>>(i)
-                .into(),
-            "smallint" | "smallserial" | "int2" => row
-                .get::<_, Option<i16>>(i)
-                .into(),
-            "oid" => row
-                .get::<_, Option<u32>>(i)
-                .into(),
-            "int4" | "int" | "serial" => row
-                .get::<_, Option<i32>>(i)
-                .into(),
-            "bigint" | "int8" | "bigserial" => row
-                .get::<_, Option<i64>>(i)
-                .into(),
-            "bool" => row
-                .get::<_, Option<bool>>(i)
-                .into(),
+            "bytea" => row.get::<_, Option<Vec<u8>>>(i).map(BytesPtr::from).into(),
+            "char" => row.get::<_, Option<i8>>(i).into(),
+            "smallint" | "smallserial" | "int2" => row.get::<_, Option<i16>>(i).into(),
+            "oid" => row.get::<_, Option<u32>>(i).into(),
+            "int4" | "int" | "serial" => row.get::<_, Option<i32>>(i).into(),
+            "bigint" | "int8" | "bigserial" => row.get::<_, Option<i64>>(i).into(),
+            "bool" => row.get::<_, Option<bool>>(i).into(),
             "double precision" | "float8" => row
                 .get::<_, Option<f64>>(i)
                 .or_else(|| Some(f64::NAN))
@@ -360,15 +344,11 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
                 .map(|v| CString::new(v).unwrap())
                 .map(StringPtr::from)
                 .into(),
-            "timestamp" | "timestamp with time zone" | "timestamptz" => row
-                .get::<_, Option<DateTimeInfo>>(i)
-                .into(),
-            "date" => row
-                .get::<_, Option<DateInfo>>(i)
-                .into(),
-            "time" => row
-                .get::<_, Option<TimeInfo>>(i)
-                .into(),
+            "timestamp" | "timestamp with time zone" | "timestamptz" => {
+                row.get::<_, Option<DateTimeInfo>>(i).into()
+            }
+            "date" => row.get::<_, Option<DateInfo>>(i).into(),
+            "time" => row.get::<_, Option<TimeInfo>>(i).into(),
             "json" | "jsonb" => row
                 .get::<_, Option<serde_json::Value>>(i)
                 .map(|v| CString::new(v.to_string()).unwrap())
