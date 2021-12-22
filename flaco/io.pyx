@@ -194,16 +194,12 @@ cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
         free(data.string._0.ptr)
 
     elif data.tag == lib.Data_Tag.Date:
-        arr[idx] = np.timedelta64(
-            DATE_01_JAN_2000 + data.date._0.offset,
-            'D'
-        )
+        arr[idx] = \
+            DATE_01_JAN_2000 + np.timedelta64(data.date._0.offset, 'D')
 
     elif data.tag == lib.Data_Tag.DateTime:
-        arr[idx] = np.timedelta64(
-            DATETIME_MID_NIGHT_01_JAN_2000 + data.date_time._0.offset,
-            'us'
-        )
+        arr[idx] = \
+            DATETIME_MID_NIGHT_01_JAN_2000 + np.timedelta64(data.date_time._0.offset, 'us')
 
     elif data.tag == lib.Data_Tag.Time:
         arr[idx] = dt.time_new(
