@@ -19,6 +19,7 @@ typedef struct {
    * The value represents the number of days since January 1st, 2000.
    */
   int32_t offset;
+  const int32_t *ptr;
 } DateInfo;
 
 typedef struct {
@@ -26,6 +27,7 @@ typedef struct {
    * The value represents the number of microseconds since midnight, January 1st, 2000.
    */
   int64_t offset;
+  const int64_t *ptr;
 } DateTimeInfo;
 
 typedef struct {

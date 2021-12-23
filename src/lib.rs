@@ -149,12 +149,14 @@ impl From<CString> for StringPtr {
 pub struct DateInfo {
     /// The value represents the number of days since January 1st, 2000.
     offset: i32,
+    ptr: *const i32,
 }
 
 impl FromSql<'_> for DateInfo {
     fn from_sql(_: &Type, raw: &[u8]) -> std::result::Result<Self, Box<dyn Error + Sync + Send>> {
         let offset = postgres_protocol::types::date_from_sql(raw)?;
-        Ok(Self { offset })
+        let ptr = &offset as *const _;
+        Ok(Self { offset, ptr })
     }
     fn accepts(ty: &Type) -> bool {
         ty == &Type::DATE
@@ -189,12 +191,14 @@ impl FromSql<'_> for TimeInfo {
 #[repr(C)]
 pub struct DateTimeInfo {
     /// The value represents the number of microseconds since midnight, January 1st, 2000.
-    offset: i64,
+    offset: i64, // holds actual value, garbage value if offset is null ptr
+    ptr: *const i64, // signals if the value from db was null
 }
 impl FromSql<'_> for DateTimeInfo {
     fn from_sql(_: &Type, raw: &[u8]) -> std::result::Result<Self, Box<dyn Error + Sync + Send>> {
         let offset = postgres_protocol::types::timestamp_from_sql(raw)?;
-        Ok(Self { offset })
+        let ptr = &offset as *const _;
+        Ok(Self { offset, ptr })
     }
     fn accepts(ty: &Type) -> bool {
         ty == &Type::TIMESTAMP || ty == &Type::TIMESTAMPTZ
@@ -344,10 +348,24 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
                 .map(|v| CString::new(v).unwrap())
                 .map(StringPtr::from)
                 .into(),
-            "timestamp" | "timestamp with time zone" | "timestamptz" => {
-                row.get::<_, Option<DateTimeInfo>>(i).into()
-            }
-            "date" => row.get::<_, Option<DateInfo>>(i).into(),
+            "timestamp" | "timestamp with time zone" | "timestamptz" => row
+                .get::<_, Option<DateTimeInfo>>(i)
+                .or_else(|| {
+                    Some(DateTimeInfo {
+                        offset: 0, // garbage value
+                        ptr: std::ptr::null(),
+                    })
+                })
+                .into(),
+            "date" => row
+                .get::<_, Option<DateInfo>>(i)
+                .or_else(|| {
+                    Some(DateInfo {
+                        offset: 0,  // garbage value
+                        ptr: std::ptr::null(),
+                    })
+                })
+                .into(),
             "time" => row.get::<_, Option<TimeInfo>>(i).into(),
             "json" | "jsonb" => row
                 .get::<_, Option<serde_json::Value>>(i)

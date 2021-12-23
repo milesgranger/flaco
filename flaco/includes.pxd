@@ -17,6 +17,7 @@ cdef extern from "./flaco.h":
 
     ctypedef struct DateInfo:
         np.int32_t offset
+        np.int32_t *ptr
 
     ctypedef struct TimeInfo:
         np.uint8_t hour
@@ -26,6 +27,7 @@ cdef extern from "./flaco.h":
 
     ctypedef struct DateTimeInfo:
         np.int64_t offset
+        np.int64_t *ptr
 
     ctypedef enum Data_Tag:
         Bytes

@@ -47,7 +47,7 @@ dev_requirements = [
 
 setup(
     name="flaco",
-    version="0.5.0",
+    version="0.5.1",
     author="Miles Granger",
     author_email="miles59923@gmail.com",
     description="Fast and Efficient PostgreSQL data into numpy/pandas",
