@@ -1,6 +1,6 @@
 [package]
 name    = "flaco"
-version = "0.5.1"
+version = "0.5.2"
 edition = "2018"
 license = "Unlicense/MIT"
 
@@ -9,7 +9,6 @@ license = "Unlicense/MIT"
 crate-type = ["staticlib"]
 
 [dependencies]
-bumpalo      = "3.8.0"
 uuid         = "0.8.2"
 serde_json   = "1.0.68"
 rust_decimal = { version = "1.16.0", features = ["db-postgres"] }
