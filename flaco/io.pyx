@@ -87,7 +87,7 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1, int size_hint=-1):
         for i in range(0, n_columns):
             data_ptr = lib.index_row(row_data_array_ptr, n_columns, i)
             data = deref(data_ptr)
-            output[i] = insert_data_into_array(data, output[i], row_idx)
+            insert_data_into_array(data, output[i], row_idx)
 
 
         row_idx += one
@@ -160,7 +160,7 @@ cdef np.ndarray array_init(lib.Data data, int len):
     return array
 
 
-cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
+cdef insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
     cdef:
         np.ndarray[np.uint8_t, ndim=1] arr_bytes
         np.npy_intp intp
@@ -230,7 +230,6 @@ cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
 
     else:
         raise ValueError(f"Unsupported Data enum {data.tag}")
-    return arr
 
 cdef class Database:
 
