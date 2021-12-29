@@ -321,10 +321,9 @@ pub fn init_row_data_array(row: &pg::Row) -> RowDataArrayPtr {
 
 fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
     let mut values = unsafe { Vec::from_raw_parts(*array_ptr as _, row.len(), row.len()) };
-    assert_eq!(values.len(), values.capacity());
-    assert_eq!(values.len(), row.len());
+    let columns = row.columns();
     for i in 0..row.len() {
-        let type_ = row.columns()[i].type_();
+        let type_ = unsafe { columns.get_unchecked(i).type_() };
         // TODO: postgres-types: expose Inner enum which these variations
         // and have postgres Row.type/(or something) expose the variant
         let value: Data = match type_.name() {
@@ -396,10 +395,9 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
                 return Err(msg.into());
             }
         };
-        values[i] = value;
+        *unsafe { values.get_unchecked_mut(i) } = value;
+
     }
-    assert_eq!(values.len(), values.capacity());
-    assert_eq!(values.len(), row.len());
     mem::forget(values);
     Ok(())
 }
