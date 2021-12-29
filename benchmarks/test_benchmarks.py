@@ -125,8 +125,8 @@ def memory_profile():
         data = read_sql(stmt, con, n_rows=1_000_000)
         _flaco_df = pd.DataFrame(data, copy=False)
 
-    #engine = create_engine(DB_URI)
-    #_pandas_df = pd.read_sql(stmt, engine)
+    engine = create_engine(DB_URI)
+    _pandas_df = pd.read_sql(stmt, engine)
 
 
 if __name__ == "__main__":

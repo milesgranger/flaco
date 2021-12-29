@@ -29,14 +29,14 @@ Line #    Mem usage    Increment  Occurences   Line Contents
    119                                         def memory_profile():
    120     97.9 MiB      0.0 MiB           1       stmt = "select * from test_table"
    121                                         
-   122    354.9 MiB    257.0 MiB           1       _cx_df = cx.read_sql(DB_URI, stmt, return_type="pandas")
+   122    359.5 MiB    261.6 MiB           1       _cx_df = cx.read_sql(DB_URI, stmt, return_type="pandas")
    123                                         
-   124    354.9 MiB      0.0 MiB           1       with Database(DB_URI) as con:
-   125    533.9 MiB    178.9 MiB           1           data = read_sql(stmt, con)
-   126    541.2 MiB      7.3 MiB           1           _flaco_df = pd.DataFrame(data, copy=False)
+   124    359.5 MiB      0.0 MiB           1       with Database(DB_URI) as con:
+   125    500.9 MiB    141.4 MiB           1           data = read_sql(stmt, con, n_rows=1_000_000)
+   126    523.9 MiB     23.0 MiB           1           _flaco_df = pd.DataFrame(data, copy=False)
    127                                         
-   128    545.3 MiB      4.1 MiB           1       engine = create_engine(DB_URI)
-   129   1680.9 MiB   1135.5 MiB           1       _pandas_df = pd.read_sql(stmt, engine)
+   128    528.6 MiB      4.6 MiB           1       engine = create_engine(DB_URI)
+   129   1680.8 MiB   1152.2 MiB           1       _pandas_df = pd.read_sql(stmt, engine)
 ```
 
 ---
@@ -88,8 +88,10 @@ They have much wider support for a range of data sources, while flaco only
 supports postgres for now.
 
 Performance wise, benchmarking seems to indicate flaco is generally more performant
-in terms of memory, but connectorx is faster when temporal data types (time, timestamp, etc)
-are used. If it's pure numeric dtypes, flaco is faster and more memory efficient.
+in terms of memory, but connectorx performs better when `time` dtype is read; this 
+could be due in part to connectorx using strings, but flaco, much like pandas, will 
+parse it into `datetime.time` objects. However, connectorx does appear to be
+slightly faster than flaco.
 
 Connectorx [will make precheck queries](https://github.com/sfu-db/connector-x#how-does-connectorx-download-the-data)
 to the source before starting to download data. Depending on your application,
@@ -114,7 +116,6 @@ which include, but not limited to:
 - 📝 Poor/non-existant error messages
 - 💩 Core dumps
 - 🚰 Memory leaks (although I think most are handled now)
-- 🦖 Almost complete lack of exception handling from underlying Rust/C interface
 - 📍 PostgreSQL `numeric` type should ideally be converted to `decimal.Decimal`
      but uses `f64` for now; potentially loosing precision. Note, this
      is exactly what `pandas.read_sql` does. 
