@@ -175,11 +175,12 @@ pub struct TimeInfo {
 impl FromSql<'_> for TimeInfo {
     fn from_sql(ty: &Type, raw: &[u8]) -> std::result::Result<Self, Box<dyn Error + Sync + Send>> {
         let t = time::Time::from_sql(ty, raw)?;
+        let (hour, minute, second, usecond) = t.as_hms_micro();
         Ok(Self {
-            hour: t.hour(),
-            minute: t.minute(),
-            second: t.second(),
-            usecond: t.microsecond(),
+            hour,
+            minute,
+            second,
+            usecond,
         })
     }
     fn accepts(ty: &Type) -> bool {
@@ -360,7 +361,7 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
                 .get::<_, Option<DateInfo>>(i)
                 .or_else(|| {
                     Some(DateInfo {
-                        offset: 0,  // garbage value
+                        offset: 0, // garbage value
                         ptr: std::ptr::null(),
                     })
                 })
@@ -396,7 +397,6 @@ fn row_data(row: pg::Row, array_ptr: &mut RowDataArrayPtr) -> Result<()> {
             }
         };
         *unsafe { values.get_unchecked_mut(i) } = value;
-
     }
     mem::forget(values);
     Ok(())
