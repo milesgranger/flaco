@@ -64,16 +64,18 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1, int size_hint=-1):
         np.uint32_t n_increment = 1_000 if size_hint == -1 else size_hint
         np.uint32_t current_array_len = 0
         lib.RowDataArrayPtr row_data_ptr
-        lib.Data *data
+        lib.Data *data_ptr
+        lib.Data data
 
     while row_iterator != NULL:
         if row_idx == 0:
             # Initialize arrays for output
             # will resize at `n_increment` if `n_rows` is not set.
             for i in range(0, n_columns):
-                data = lib.index_row(row_data_array_ptr, n_columns, i)
+                data_ptr = lib.index_row(row_data_array_ptr, n_columns, i)
+                data = deref(data_ptr)
                 output.append(
-                    array_init(deref(data), n_increment if n_rows == -1 else n_rows)
+                    array_init(data, n_increment if n_rows == -1 else n_rows)
                 )
 
         # grow arrays if next insert is passed current len
@@ -83,8 +85,10 @@ cpdef dict read_sql(str stmt, Database db, int n_rows=-1, int size_hint=-1):
                 current_array_len += n_increment
 
         for i in range(0, n_columns):
-            data = lib.index_row(row_data_array_ptr, n_columns, i)
-            output[i] = insert_data_into_array(deref(data), output[i], row_idx)
+            data_ptr = lib.index_row(row_data_array_ptr, n_columns, i)
+            data = deref(data_ptr)
+            insert_data_into_array(data, output[i], row_idx)
+
 
         row_idx += one
 
@@ -156,7 +160,7 @@ cdef np.ndarray array_init(lib.Data data, int len):
     return array
 
 
-cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
+cdef insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
     cdef:
         np.ndarray[np.uint8_t, ndim=1] arr_bytes
         np.npy_intp intp
@@ -226,7 +230,6 @@ cdef np.ndarray insert_data_into_array(lib.Data data, np.ndarray arr, int idx):
 
     else:
         raise ValueError(f"Unsupported Data enum {data.tag}")
-    return arr
 
 cdef class Database:
 

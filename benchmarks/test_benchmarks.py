@@ -122,7 +122,7 @@ def memory_profile():
     _cx_df = cx.read_sql(DB_URI, stmt, return_type="pandas")
 
     with Database(DB_URI) as con:
-        data = read_sql(stmt, con)
+        data = read_sql(stmt, con, n_rows=1_000_000)
         _flaco_df = pd.DataFrame(data, copy=False)
 
     engine = create_engine(DB_URI)
@@ -130,5 +130,5 @@ def memory_profile():
 
 
 if __name__ == "__main__":
-    _table_setup(n_rows=1_000_000, include_nulls=False)
+    #_table_setup(n_rows=1_000_000, include_nulls=False)
     memory_profile()
