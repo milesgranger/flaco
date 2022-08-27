@@ -4,12 +4,13 @@ use postgres::fallible_iterator::FallibleIterator;
 use postgres::types::{FromSql, Type};
 use postgres::RowIter;
 use rust_decimal::prelude::{Decimal, ToPrimitive};
+use std::any::Any;
 use std::error::Error;
 use std::iter::Iterator;
 use std::net::IpAddr;
 use std::collections::{HashMap};
 use time;
-use arrow2::{array::Array, array, datatypes::DataType};
+use arrow2::{array::{Array, MutablePrimitiveArray, MutableArray}, array, datatypes::DataType};
 
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -21,18 +22,19 @@ pub struct Column {
     name: String
 }
 impl Column  {
-    pub fn new(array: impl Array, name: impl ToString) -> Self {
+    pub fn new(array: impl MutableArray, name: impl ToString) -> Self {
+        let mut array = array;
         Self {
             dtype: array.data_type().clone(),
-            array: array.to_boxed(),
+            array: array.as_box(),
             name: name.to_string()
         }
     }
     pub fn dtype(&self) -> &DataType {
         &self.dtype
     }
-    pub fn append<T>(&mut self, val: T) -> Result<()> {
-        todo!()
+    pub fn inner_mut<T: Any + 'static>(&mut self) -> &mut T {
+        self.array.as_any_mut().downcast_mut::<T>().unwrap()
     }
 }
 
@@ -57,8 +59,11 @@ fn init_table(row: &pg::Row) -> Result<Vec<Column>> {
     for column in row.columns() {
         let col = match column.type_() {
             &pg::types::Type::BYTEA => {
-                Column::new(array::BinaryArray::<i32>::new_empty(DataType::Binary), column.name())
+                Column::new(array::MutableBinaryArray::<i32>::new(), column.name())
             },
+            &pg::types::Type::CHAR => {
+                Column::new(array::MutablePrimitiveArray::<i8>::new(), column.name())
+            }
             _ => todo!()
         };
         table.push(col)
@@ -70,7 +75,14 @@ fn init_table(row: &pg::Row) -> Result<Vec<Column>> {
 fn append_row(table: &mut Vec<Column>, row: &pg::Row) -> Result<()> {
     for (idx, column) in table.iter_mut().enumerate() {
         match column.dtype() {
-            &DataType::Binary => column.append(row.get::<_, Option<Vec<u8>>>(idx))?,
+            &DataType::Binary => {
+                let arr = column.inner_mut::<array::MutableBinaryArray<i32>>();
+                arr.push(row.get::<_, Option<Vec<u8>>>(idx));
+            },
+            &DataType::UInt8 => {
+                let arr = column.inner_mut::<array::MutablePrimitiveArray<i8>>();
+                arr.push(row.get::<_, Option<i8>>(idx));
+            }
             _ => todo!()
         }
     }
