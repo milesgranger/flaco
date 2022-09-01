@@ -1,17 +1,20 @@
 //#![warn(missing_docs)]
+use arrow2::{
+    array,
+    array::{Array, MutableArray, MutablePrimitiveArray},
+    datatypes::DataType,
+};
 use postgres as pg;
 use postgres::fallible_iterator::FallibleIterator;
 use postgres::types::{FromSql, Type};
 use postgres::RowIter;
 use rust_decimal::prelude::{Decimal, ToPrimitive};
 use std::any::Any;
+use std::collections::HashMap;
 use std::error::Error;
 use std::iter::Iterator;
 use std::net::IpAddr;
-use std::collections::{HashMap};
 use time;
-use arrow2::{array::{Array, MutablePrimitiveArray, MutableArray}, array, datatypes::DataType};
-
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 pub type Table = Vec<Column>;
@@ -19,15 +22,15 @@ pub type Table = Vec<Column>;
 pub struct Column {
     array: Box<dyn Array>,
     dtype: DataType,
-    name: String
+    name: String,
 }
-impl Column  {
+impl Column {
     pub fn new(array: impl MutableArray, name: impl ToString) -> Self {
         let mut array = array;
         Self {
             dtype: array.data_type().clone(),
             array: array.as_box(),
-            name: name.to_string()
+            name: name.to_string(),
         }
     }
     pub fn dtype(&self) -> &DataType {
@@ -45,11 +48,11 @@ pub fn read_sql(client: &mut pg::Client, sql: &str) -> Result<Table> {
         append_row(&mut table, &row)?;
         table
     } else {
-        return Err("Query returned no rows!".into())
+        return Err("Query returned no rows!".into());
     };
     while let Some(row) = row_iter.next()? {
         append_row(&mut table, &row);
-    }        
+    }
     todo!()
 }
 
@@ -60,15 +63,29 @@ fn init_table(row: &pg::Row) -> Result<Vec<Column>> {
         let col = match column.type_() {
             &pg::types::Type::BYTEA => {
                 Column::new(array::MutableBinaryArray::<i32>::new(), column.name())
-            },
+            }
             &pg::types::Type::CHAR => {
                 Column::new(array::MutablePrimitiveArray::<i8>::new(), column.name())
             }
-            _ => todo!()
+            &pg::types::Type::INT2 => {
+                Column::new(array::MutablePrimitiveArray::<i16>::new(), column.name())
+            }
+            &pg::types::Type::INT4 => {
+                Column::new(array::MutablePrimitiveArray::<i32>::new(), column.name())
+            }
+            _ => todo!(),
         };
         table.push(col)
     }
     Ok(table)
+}
+
+macro_rules! append_row {
+    ($column:ident, $row:ident, $idx:ident, $dtype:ty) => {
+        $column
+            .inner_mut::<array::MutablePrimitiveArray<$dtype>>()
+            .push($row.get::<_, Option<$dtype>>($idx))
+    };
 }
 
 #[inline(always)]
@@ -76,22 +93,20 @@ fn append_row(table: &mut Vec<Column>, row: &pg::Row) -> Result<()> {
     for (idx, column) in table.iter_mut().enumerate() {
         match column.dtype() {
             &DataType::Binary => {
-                let arr = column.inner_mut::<array::MutableBinaryArray<i32>>();
-                arr.push(row.get::<_, Option<Vec<u8>>>(idx));
-            },
-            &DataType::UInt8 => {
-                let arr = column.inner_mut::<array::MutablePrimitiveArray<i8>>();
-                arr.push(row.get::<_, Option<i8>>(idx));
+                column
+                    .inner_mut::<array::MutableBinaryArray<i32>>()
+                    .push(row.get::<_, Option<Vec<u8>>>(idx));
             }
-            _ => todo!()
+            &DataType::Int8 => append_row!(column, row, idx, i8),
+            //&DataType::Int16 => append_row!(i16),
+            //&DataType::Int32 => append_row!(i32),
+            _ => todo!(),
         }
     }
-    
+
     Ok(())
 }
 
-fn column_names(row: &pg::Row) -> impl Iterator<Item=String> + '_ {
-    row.columns()
-        .iter()
-        .map(|c| c.name().to_string())
+fn column_names(row: &pg::Row) -> impl Iterator<Item = String> + '_ {
+    row.columns().iter().map(|c| c.name().to_string())
 }
