@@ -1,7 +1,7 @@
 //#![warn(missing_docs)]
 use arrow2::{
     array,
-    array::{Array, MutableArray, MutablePrimitiveArray},
+    array::{Array, MutableArray, MutableBinaryArray, MutableBooleanArray, MutablePrimitiveArray},
     datatypes::DataType,
 };
 use postgres as pg;
@@ -66,8 +66,8 @@ fn init_table(row: &pg::Row) -> Result<Vec<Column>> {
     for column in row.columns() {
         let name = column.name();
         let col = match column.type_() {
-            &Type::BYTEA => Column::new(array::MutableBinaryArray::<i32>::new(), name),
-            &Type::BOOL => Column::new(array::MutableBooleanArray::new(), name),
+            &Type::BYTEA => Column::new(MutableBinaryArray::<i32>::new(), name),
+            &Type::BOOL => Column::new(MutableBooleanArray::new(), name),
             &Type::CHAR => Column::new(MutablePrimitiveArray::<i8>::new(), name),
             &Type::INT2 => Column::new(MutablePrimitiveArray::<i16>::new(), name),
             &Type::INT4 => Column::new(MutablePrimitiveArray::<i32>::new(), name),
@@ -94,21 +94,15 @@ fn append_row(table: &mut Vec<Column>, row: &pg::Row) -> Result<()> {
     for (idx, column) in table.iter_mut().enumerate() {
         match column.dtype() {
             &DataType::Binary => {
-                column
-                    .inner_mut::<array::MutableBinaryArray<i32>>()
-                    .push(row.get::<_, Option<Vec<u8>>>(idx));
+                column.push::<_, MutableBinaryArray<i32>>(row.get::<_, Option<Vec<u8>>>(idx))?
             }
-            &DataType::Boolean => {
-                column
-                    .inner_mut::<array::MutableBooleanArray>()
-                    .push(row.get::<_, Option<bool>>(idx));
-            }
-            &DataType::Int8 => append_row!(column, row, idx, i8),
-            &DataType::Int16 => append_row!(column, row, idx, i16),
-            &DataType::Int32 => append_row!(column, row, idx, i32),
-            &DataType::Int64 => append_row!(column, row, idx, i64),
-            &DataType::Float32 => append_row!(column, row, idx, f32),
-            &DataType::Float64 => append_row!(column, row, idx, f64),
+            &DataType::Boolean => column.push::<_, MutableBooleanArray>(row.get(idx))?,
+            &DataType::Int8 => column.push::<_, MutablePrimitiveArray<i8>>(row.get(idx))?,
+            &DataType::Int16 => column.push::<_, MutablePrimitiveArray<i16>>(row.get(idx))?,
+            &DataType::Int32 => column.push::<_, MutablePrimitiveArray<i32>>(row.get(idx))?,
+            &DataType::Int64 => column.push::<_, MutablePrimitiveArray<i64>>(row.get(idx))?,
+            &DataType::Float32 => column.push::<_, MutablePrimitiveArray<f32>>(row.get(idx))?,
+            &DataType::Float64 => column.push::<_, MutablePrimitiveArray<f64>>(row.get(idx))?,
             _ => todo!(),
         }
     }
