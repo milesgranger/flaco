@@ -162,6 +162,14 @@ fn append_row(table: &mut BTreeMap<String, Column>, row: &pg::Row) -> Result<()>
                     .inner_mut::<MutableFixedSizeBinaryArray>()
                     .push(row.try_get::<_, Vec<u8>>(idx).ok());
             }
+            &Type::INTERVAL => {
+                // INTERVAL is 16 bytes; Fixed size binary array then sinece i128 not impl FromSql
+                table
+                    .entry(column_name)
+                    .or_insert_with(|| Column::new(MutableFixedSizeBinaryArray::new(16)))
+                    .inner_mut::<MutableFixedSizeBinaryArray>()
+                    .push(row.try_get::<_, Vec<u8>>(idx).ok());
+            }
             _ => unimplemented!(
                 "Type {} not implemented, consider opening an issue or casting to text.",
                 column.type_()
