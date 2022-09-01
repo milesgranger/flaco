@@ -1,8 +1,11 @@
 //#![warn(missing_docs)]
 use arrow2::{
     array,
-    array::{Array, MutableArray, MutableBinaryArray, MutableBooleanArray, MutablePrimitiveArray},
-    datatypes::DataType,
+    array::{
+        Array, MutableArray, MutableBinaryArray, MutableBooleanArray, MutableFixedSizeBinaryArray,
+        MutablePrimitiveArray,
+    },
+    datatypes::{DataType, TimeUnit},
 };
 use postgres as pg;
 use postgres::fallible_iterator::FallibleIterator;
@@ -57,7 +60,7 @@ pub fn read_sql(client: &mut pg::Client, sql: &str) -> Result<Table> {
     while let Some(row) = row_iter.next()? {
         append_row(&mut table, &row);
     }
-    todo!()
+    Ok(table)
 }
 
 #[inline(always)]
@@ -74,6 +77,12 @@ fn init_table(row: &pg::Row) -> Result<Vec<Column>> {
             &Type::INT8 => Column::new(MutablePrimitiveArray::<i64>::new(), name),
             &Type::FLOAT4 => Column::new(MutablePrimitiveArray::<f32>::new(), name),
             &Type::FLOAT8 => Column::new(MutablePrimitiveArray::<f64>::new(), name),
+            &Type::TIMESTAMP => Column::new(MutablePrimitiveArray::<i64>::new(), name),
+            &Type::TIMESTAMPTZ => Column::new(MutablePrimitiveArray::<i64>::new(), name),
+            &Type::DATE => Column::new(MutablePrimitiveArray::<i32>::new(), name),
+            &Type::VARCHAR | &Type::CHAR_ARRAY | &Type::TEXT | &Type::NAME | &Type::UNKNOWN => {
+                Column::new(MutableBinaryArray::<i32>::new(), name)
+            }
             _ => todo!(),
         };
         table.push(col)
@@ -83,26 +92,38 @@ fn init_table(row: &pg::Row) -> Result<Vec<Column>> {
 
 #[inline(always)]
 fn append_row(table: &mut Vec<Column>, row: &pg::Row) -> Result<()> {
-    macro_rules! append_row {
-        ($column:ident, $row:ident, $idx:ident, $dtype:ty) => {
-            $column
-                .inner_mut::<array::MutablePrimitiveArray<$dtype>>()
-                .push($row.get::<_, Option<$dtype>>($idx))
-        };
-    }
-
     for (idx, column) in table.iter_mut().enumerate() {
         match column.dtype() {
             &DataType::Binary => {
                 column.push::<_, MutableBinaryArray<i32>>(row.get::<_, Option<Vec<u8>>>(idx))?
             }
-            &DataType::Boolean => column.push::<_, MutableBooleanArray>(row.get(idx))?,
-            &DataType::Int8 => column.push::<_, MutablePrimitiveArray<i8>>(row.get(idx))?,
-            &DataType::Int16 => column.push::<_, MutablePrimitiveArray<i16>>(row.get(idx))?,
-            &DataType::Int32 => column.push::<_, MutablePrimitiveArray<i32>>(row.get(idx))?,
-            &DataType::Int64 => column.push::<_, MutablePrimitiveArray<i64>>(row.get(idx))?,
-            &DataType::Float32 => column.push::<_, MutablePrimitiveArray<f32>>(row.get(idx))?,
-            &DataType::Float64 => column.push::<_, MutablePrimitiveArray<f64>>(row.get(idx))?,
+            &DataType::Boolean => column.push::<_, MutableBooleanArray>(row.try_get(idx).ok())?,
+            &DataType::Int8 => {
+                column.push::<_, MutablePrimitiveArray<i8>>(row.try_get(idx).ok())?
+            }
+            &DataType::Int16 => {
+                column.push::<_, MutablePrimitiveArray<i16>>(row.try_get(idx).ok())?
+            }
+            &DataType::Int32 => {
+                column.push::<_, MutablePrimitiveArray<i32>>(row.try_get(idx).ok())?
+            }
+            &DataType::Int64 => {
+                column.push::<_, MutablePrimitiveArray<i64>>(row.try_get(idx).ok())?
+            }
+            &DataType::Float32 => {
+                column.push::<_, MutablePrimitiveArray<f32>>(row.try_get(idx).ok())?
+            }
+            &DataType::Float64 => {
+                column.push::<_, MutablePrimitiveArray<f64>>(row.try_get(idx).ok())?
+            }
+
+            // TODO: Need to determine TZ (if exists) before here, probably in `init_table`
+            DataType::Timestamp(t, tz) => {
+                column.push::<_, MutablePrimitiveArray<i64>>(row.try_get(idx).ok())?
+            }
+            DataType::Date32 => {
+                column.push::<_, MutablePrimitiveArray<i32>>(row.try_get(idx).ok())?
+            }
             _ => todo!(),
         }
     }
