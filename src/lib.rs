@@ -92,42 +92,24 @@ fn init_table(row: &pg::Row) -> Result<Vec<Column>> {
 
 #[inline(always)]
 fn append_row(table: &mut Vec<Column>, row: &pg::Row) -> Result<()> {
-    for (idx, column) in table.iter_mut().enumerate() {
-        match column.dtype() {
-            &DataType::Binary => {
-                column.push::<_, MutableBinaryArray<i32>>(row.get::<_, Option<Vec<u8>>>(idx))?
+    for (idx, (row_column, table_column)) in row.columns().iter().zip(table.iter_mut()).enumerate()
+    {
+        match row_column.type_() {
+            &Type::BYTEA => {
+                table_column
+                    .push::<_, MutableBinaryArray<i32>>(row.get::<_, Option<Vec<u8>>>(idx))?;
             }
-            &DataType::Boolean => column.push::<_, MutableBooleanArray>(row.try_get(idx).ok())?,
-            &DataType::Int8 => {
-                column.push::<_, MutablePrimitiveArray<i8>>(row.try_get(idx).ok())?
+            &Type::BOOL => {
+                table_column.push::<_, MutableBooleanArray>(row.try_get(idx).ok())?;
+                table_column.dtype = DataType::Boolean;
             }
-            &DataType::Int16 => {
-                column.push::<_, MutablePrimitiveArray<i16>>(row.try_get(idx).ok())?
-            }
-            &DataType::Int32 => {
-                column.push::<_, MutablePrimitiveArray<i32>>(row.try_get(idx).ok())?
-            }
-            &DataType::Int64 => {
-                column.push::<_, MutablePrimitiveArray<i64>>(row.try_get(idx).ok())?
-            }
-            &DataType::Float32 => {
-                column.push::<_, MutablePrimitiveArray<f32>>(row.try_get(idx).ok())?
-            }
-            &DataType::Float64 => {
-                column.push::<_, MutablePrimitiveArray<f64>>(row.try_get(idx).ok())?
-            }
-
-            // TODO: Need to determine TZ (if exists) before here, probably in `init_table`
-            DataType::Timestamp(t, tz) => {
-                column.push::<_, MutablePrimitiveArray<i64>>(row.try_get(idx).ok())?
-            }
-            DataType::Date32 => {
-                column.push::<_, MutablePrimitiveArray<i32>>(row.try_get(idx).ok())?
+            &Type::CHAR => {
+                table_column.push::<_, MutablePrimitiveArray<i8>>(row.try_get(idx).ok())?;
+                table_column.dtype = DataType::Int8;
             }
             _ => todo!(),
-        }
+        };
     }
-
     Ok(())
 }
 
