@@ -9,13 +9,8 @@ use arrow2::{
 };
 use postgres as pg;
 use postgres::fallible_iterator::FallibleIterator;
-use postgres::types::{FromSql, Type};
-use postgres::RowIter;
-use rust_decimal::prelude::{Decimal, ToPrimitive};
-use std::collections::HashMap;
-use std::error::Error;
+use postgres::types::Type;
 use std::iter::Iterator;
-use std::net::IpAddr;
 use std::{any::Any, collections::BTreeMap};
 use time;
 
@@ -25,15 +20,13 @@ pub type Table = BTreeMap<String, Column>;
 pub struct Column {
     array: Box<dyn Array>,
     dtype: DataType,
-    name: String,
 }
 impl Column {
-    pub fn new(array: impl MutableArray, name: impl ToString) -> Self {
+    pub fn new(array: impl MutableArray) -> Self {
         let mut array = array;
         Self {
             dtype: array.data_type().clone(),
             array: array.as_box(),
-            name: name.to_string(),
         }
     }
     pub fn dtype(&self) -> &DataType {
@@ -52,84 +45,68 @@ pub fn read_sql(client: &mut pg::Client, sql: &str) -> Result<Table> {
     let mut row_iter = client.query_raw::<_, &i32, _>(sql, &[])?;
     let mut table = BTreeMap::new();
     while let Some(row) = row_iter.next()? {
-        append_row(&mut table, &row);
+        append_row(&mut table, &row)?;
     }
     Ok(table)
 }
 
 #[inline(always)]
 fn append_row(table: &mut BTreeMap<String, Column>, row: &pg::Row) -> Result<()> {
-    for (idx, row_column) in row.columns().iter().enumerate() {
-        let column_name = row_column.name().to_string();
-        match row_column.type_() {
+    for (idx, column) in row.columns().iter().enumerate() {
+        let column_name = column.name().to_string();
+        match column.type_() {
             &Type::BYTEA => {
                 table
                     .entry(column_name)
-                    .or_insert_with(|| {
-                        Column::new(MutableBinaryArray::<i32>::new(), row_column.name())
-                    })
+                    .or_insert_with(|| Column::new(MutableBinaryArray::<i32>::new()))
                     .push::<_, MutableBinaryArray<i32>>(row.get::<_, Option<Vec<u8>>>(idx))?;
             }
             &Type::BOOL => {
                 table
                     .entry(column_name)
-                    .or_insert_with(|| Column::new(MutableBooleanArray::new(), row_column.name()))
+                    .or_insert_with(|| Column::new(MutableBooleanArray::new()))
                     .push::<_, MutableBooleanArray>(row.try_get(idx).ok())?;
             }
             &Type::CHAR => {
                 table
                     .entry(column_name)
-                    .or_insert_with(|| {
-                        Column::new(MutablePrimitiveArray::<i8>::new(), row_column.name())
-                    })
+                    .or_insert_with(|| Column::new(MutablePrimitiveArray::<i8>::new()))
                     .push::<_, MutablePrimitiveArray<i8>>(row.try_get(idx).ok())?;
             }
             &Type::TEXT | &Type::VARCHAR | &Type::UNKNOWN | &Type::NAME => {
                 table
                     .entry(column_name)
-                    .or_insert_with(|| {
-                        Column::new(MutableBinaryArray::<i32>::new(), row_column.name())
-                    })
+                    .or_insert_with(|| Column::new(MutableBinaryArray::<i32>::new()))
                     .push::<_, MutableBinaryArray<i32>>(row.try_get::<_, Vec<u8>>(idx).ok())?;
             }
             &Type::INT2 => {
                 table
                     .entry(column_name)
-                    .or_insert_with(|| {
-                        Column::new(MutablePrimitiveArray::<i16>::new(), row_column.name())
-                    })
+                    .or_insert_with(|| Column::new(MutablePrimitiveArray::<i16>::new()))
                     .push::<_, MutablePrimitiveArray<i16>>(row.try_get(idx).ok())?;
             }
             &Type::INT4 => {
                 table
                     .entry(column_name)
-                    .or_insert_with(|| {
-                        Column::new(MutablePrimitiveArray::<i32>::new(), row_column.name())
-                    })
+                    .or_insert_with(|| Column::new(MutablePrimitiveArray::<i32>::new()))
                     .push::<_, MutablePrimitiveArray<i32>>(row.try_get(idx).ok())?;
             }
             &Type::INT8 => {
                 table
                     .entry(column_name)
-                    .or_insert_with(|| {
-                        Column::new(MutablePrimitiveArray::<i64>::new(), row_column.name())
-                    })
+                    .or_insert_with(|| Column::new(MutablePrimitiveArray::<i64>::new()))
                     .push::<_, MutablePrimitiveArray<i64>>(row.try_get(idx).ok())?;
             }
             &Type::FLOAT4 => {
                 table
                     .entry(column_name)
-                    .or_insert_with(|| {
-                        Column::new(MutablePrimitiveArray::<f32>::new(), row_column.name())
-                    })
+                    .or_insert_with(|| Column::new(MutablePrimitiveArray::<f32>::new()))
                     .push::<_, MutablePrimitiveArray<f32>>(row.try_get(idx).ok())?;
             }
             &Type::FLOAT8 => {
                 table
                     .entry(column_name)
-                    .or_insert_with(|| {
-                        Column::new(MutablePrimitiveArray::<f64>::new(), row_column.name())
-                    })
+                    .or_insert_with(|| Column::new(MutablePrimitiveArray::<f64>::new()))
                     .push::<_, MutablePrimitiveArray<f64>>(row.try_get(idx).ok())?;
             }
             &Type::TIMESTAMP => {
@@ -139,12 +116,56 @@ fn append_row(table: &mut BTreeMap<String, Column>, row: &pg::Row) -> Result<()>
                         Column::new(
                             MutablePrimitiveArray::<i64>::new()
                                 .to(DataType::Time64(TimeUnit::Microsecond)),
-                            row_column.name(),
                         )
                     })
                     .push::<_, MutablePrimitiveArray<i64>>(row.try_get(idx).ok())?;
             }
-            _ => todo!(),
+            &Type::TIMESTAMPTZ => {
+                let offset = row
+                    .try_get::<_, time::OffsetDateTime>(idx)
+                    .ok()
+                    .map(|v| v.offset().to_string());
+                table
+                    .entry(column_name)
+                    .or_insert_with(|| {
+                        Column::new(
+                            MutablePrimitiveArray::<i64>::new()
+                                .to(DataType::Timestamp(TimeUnit::Microsecond, offset)),
+                        )
+                    })
+                    .push::<_, MutablePrimitiveArray<i64>>(row.try_get(idx).ok())?;
+            }
+            &Type::DATE => {
+                table
+                    .entry(column_name)
+                    .or_insert_with(|| {
+                        Column::new(MutablePrimitiveArray::<i32>::new().to(DataType::Date32))
+                    })
+                    .push::<_, MutablePrimitiveArray<i32>>(row.try_get(idx).ok())?;
+            }
+            &Type::TIME => {
+                table
+                    .entry(column_name)
+                    .or_insert_with(|| {
+                        Column::new(
+                            MutablePrimitiveArray::<i64>::new()
+                                .to(DataType::Time64(TimeUnit::Microsecond)),
+                        )
+                    })
+                    .push::<_, MutablePrimitiveArray<i64>>(row.try_get(idx).ok())?;
+            }
+            &Type::TIMETZ => {
+                // TIMETZ is 12 bytes; Fixed size binary array then since no DataType matches
+                table
+                    .entry(column_name)
+                    .or_insert_with(|| Column::new(MutableFixedSizeBinaryArray::new(12)))
+                    .inner_mut::<MutableFixedSizeBinaryArray>()
+                    .push(row.try_get::<_, Vec<u8>>(idx).ok());
+            }
+            _ => unimplemented!(
+                "Type {} not implemented, consider opening an issue or casting to text.",
+                column.type_()
+            ),
         }
     }
     Ok(())
