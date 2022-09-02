@@ -159,13 +159,11 @@ pub mod postgresql {
                 &Type::TIMESTAMP => {
                     table
                         .entry(column_name)
-                        .or_insert_with(|| {
-                            Column::new(
-                                MutablePrimitiveArray::<i64>::new()
-                                    .to(DataType::Time64(TimeUnit::Microsecond)),
-                            )
-                        })
-                        .push::<_, MutablePrimitiveArray<i64>>(row.try_get(idx).ok())?;
+                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
+                        .push::<_, MutableUtf8Array<i32>>(
+                            row.get::<_, Option<time::PrimitiveDateTime>>(idx)
+                                .map(|v| v.to_string()),
+                        )?;
                 }
                 &Type::TIMESTAMPTZ => {
                     let offset = row
