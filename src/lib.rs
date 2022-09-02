@@ -1,18 +1,46 @@
-//#![warn(missing_docs)]
+use std::fs::File;
+
+use arrow2::chunk::Chunk;
+use arrow2::datatypes::Schema;
+use arrow2::io::ipc::write::{FileWriter, WriteOptions};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 
 #[pymodule]
-fn flaco(py: Python, m: &PyModule) -> PyResult<()> {
-    m.add("__version__", env!("CARGO_PKG_VERSION"));
-    m.add_function(wrap_pyfunction!(read_sql_from_uri, m)?)?;
+fn flaco(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+    m.add_function(wrap_pyfunction!(read_sql_to_arrow_file, m)?)?;
     Ok(())
 }
 
+/// Read SQL to .arrow file. (IPC). Ideally we should also impl a function which
+/// transfers ownership, but the c data api doesn't seem ergonomic enought to
+/// accomplish this, yet. (between Rust and PyArrow)
 #[pyfunction]
-pub fn read_sql_from_uri(uri: &str, stmt: &str) -> PyResult<()> {
+pub fn read_sql_to_arrow_file(uri: &str, stmt: &str, path: &str) -> PyResult<()> {
     let mut client = postgres::Client::connect(uri, postgres::NoTls).unwrap();
     let table = postgresql::read_sql(&mut client, stmt).unwrap();
+    write_table_to_file(table, path)?;
+    Ok(())
+}
+
+fn write_table_to_file(table: postgresql::Table, path: &str) -> PyResult<()> {
+    let mut fields = vec![];
+    let mut arrays = vec![];
+    for (name, column) in table.into_iter() {
+        fields.push(arrow2::datatypes::Field::new(name, column.dtype, true));
+        arrays.push(column.array);
+    }
+    let schema = Schema::from(fields);
+    let options = WriteOptions { compression: None };
+
+    let file = File::create(path.to_string())?;
+    let mut writer = FileWriter::try_new(file, &schema, None, options).unwrap();
+
+    let chunk = Chunk::try_new(arrays).unwrap();
+    writer.write(&chunk, None).unwrap();
+    writer.finish().unwrap();
+
     Ok(())
 }
 
@@ -26,25 +54,19 @@ pub mod postgresql {
         datatypes::{DataType, TimeUnit},
     };
 
-    use pyo3::exceptions::PyBufferError;
-    use pyo3::prelude::*;
-    use pyo3::{ffi, AsPyPointer};
-
     use postgres as pg;
     use postgres::fallible_iterator::FallibleIterator;
     use postgres::types::Type;
-    use std::ffi::CString;
-    use std::os::raw::{c_int, c_void};
+    use std::iter::Iterator;
     use std::{any::Any, collections::BTreeMap};
-    use std::{iter::Iterator, pin::Pin};
     use time;
 
     pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
     pub type Table = BTreeMap<String, Column>;
 
     pub struct Column {
-        array: Box<dyn Array>,
-        dtype: DataType,
+        pub array: Box<dyn Array>,
+        pub dtype: DataType,
     }
 
     impl Column {
