@@ -27,9 +27,9 @@ pub fn read_sql_to_arrow_file(uri: &str, stmt: &str, path: &str) -> PyResult<()>
 fn write_table_to_file(table: postgresql::Table, path: &str) -> PyResult<()> {
     let mut fields = vec![];
     let mut arrays = vec![];
-    for (name, column) in table.into_iter() {
+    for (name, mut column) in table.into_iter() {
         fields.push(arrow2::datatypes::Field::new(name, column.dtype, true));
-        arrays.push(column.array);
+        arrays.push(column.array.as_box());
     }
     let schema = Schema::from(fields);
     let options = WriteOptions { compression: None };
@@ -48,8 +48,8 @@ pub mod postgresql {
     use arrow2::{
         array,
         array::{
-            Array, MutableArray, MutableBinaryArray, MutableBooleanArray,
-            MutableFixedSizeBinaryArray, MutablePrimitiveArray,
+            MutableArray, MutableBinaryArray, MutableBooleanArray, MutableFixedSizeBinaryArray,
+            MutablePrimitiveArray, MutableUtf8Array,
         },
         datatypes::{DataType, TimeUnit},
     };
@@ -65,23 +65,22 @@ pub mod postgresql {
     pub type Table = BTreeMap<String, Column>;
 
     pub struct Column {
-        pub array: Box<dyn Array>,
+        pub array: Box<dyn MutableArray>,
         pub dtype: DataType,
     }
 
     impl Column {
-        pub fn new(array: impl MutableArray) -> Self {
-            let mut array = array;
+        pub fn new(array: impl MutableArray + 'static) -> Self {
             Self {
                 dtype: array.data_type().clone(),
-                array: array.as_box(),
+                array: Box::new(array),
             }
         }
         pub fn dtype(&self) -> &DataType {
             &self.dtype
         }
         pub fn inner_mut<T: Any + 'static>(&mut self) -> &mut T {
-            self.array.as_any_mut().downcast_mut::<T>().unwrap()
+            self.array.as_mut_any().downcast_mut::<T>().unwrap()
         }
         pub fn push<V, T: array::TryPush<V> + Any + 'static>(&mut self, value: V) -> Result<()> {
             self.inner_mut::<T>().try_push(value)?;
@@ -124,8 +123,8 @@ pub mod postgresql {
                 &Type::TEXT | &Type::VARCHAR | &Type::UNKNOWN | &Type::NAME => {
                     table
                         .entry(column_name)
-                        .or_insert_with(|| Column::new(MutableBinaryArray::<i32>::new()))
-                        .push::<_, MutableBinaryArray<i32>>(row.try_get::<_, Vec<u8>>(idx).ok())?;
+                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
+                        .push::<_, MutableUtf8Array<i32>>(row.try_get::<_, String>(idx).ok())?;
                 }
                 &Type::INT2 => {
                     table
