@@ -2,29 +2,76 @@ use std::fs::File;
 
 use arrow2::chunk::Chunk;
 use arrow2::datatypes::Schema;
-use arrow2::io::ipc::write::{FileWriter, WriteOptions};
+use arrow2::io::{
+    ipc::write::{FileWriter, WriteOptions},
+    parquet,
+};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 
 #[pymodule]
 fn flaco(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
-    m.add_function(wrap_pyfunction!(read_sql_to_arrow_file, m)?)?;
+    m.add_function(wrap_pyfunction!(read_sql_to_file, m)?)?;
+    m.add_class::<FileFormat>()?;
     Ok(())
 }
 
-/// Read SQL to .arrow file. (IPC). Ideally we should also impl a function which
-/// transfers ownership, but the c data api doesn't seem ergonomic enought to
-/// accomplish this, yet. (between Rust and PyArrow)
+#[pyclass(name = "FileFormat")]
+#[derive(Clone, Debug)]
+pub enum FileFormat {
+    Feather,
+    Parquet,
+}
+
+/// Stream data into a file
 #[pyfunction]
-pub fn read_sql_to_arrow_file(uri: &str, stmt: &str, path: &str) -> PyResult<()> {
+pub fn read_sql_to_file(uri: &str, stmt: &str, path: &str, format: FileFormat) -> PyResult<()> {
     let mut client = postgres::Client::connect(uri, postgres::NoTls).unwrap();
     let table = postgresql::read_sql(&mut client, stmt).unwrap();
-    write_table_to_file(table, path)?;
+    match format {
+        FileFormat::Feather => write_table_to_feather(table, path)?,
+        FileFormat::Parquet => write_table_to_parquet(table, path)?,
+    }
     Ok(())
 }
 
-fn write_table_to_file(table: postgresql::Table, path: &str) -> PyResult<()> {
+fn write_table_to_parquet(table: postgresql::Table, path: &str) -> PyResult<()> {
+    let mut fields = vec![];
+    let mut arrays = vec![];
+    for (name, mut column) in table.into_iter() {
+        fields.push(arrow2::datatypes::Field::new(name, column.dtype, true));
+        arrays.push(column.array.as_box());
+    }
+    let schema = Schema::from(fields);
+    let chunks = Chunk::new(arrays);
+    let options = parquet::write::WriteOptions {
+        write_statistics: true,
+        compression: parquet::write::CompressionOptions::Uncompressed,
+        version: parquet::write::Version::V2,
+    };
+    let encodings = schema
+        .fields
+        .iter()
+        .map(|f| parquet::write::transverse(&f.data_type, |_| parquet::write::Encoding::Plain))
+        .collect();
+    let row_groups = parquet::write::RowGroupIterator::try_new(
+        vec![Ok(chunks)].into_iter(),
+        &schema,
+        options,
+        encodings,
+    )
+    .unwrap();
+    let file = File::create(path)?;
+    let mut writer = parquet::write::FileWriter::try_new(file, schema, options).unwrap();
+    for group in row_groups {
+        writer.write(group.unwrap()).unwrap();
+    }
+    writer.end(None).unwrap();
+    Ok(())
+}
+
+fn write_table_to_feather(table: postgresql::Table, path: &str) -> PyResult<()> {
     let mut fields = vec![];
     let mut arrays = vec![];
     for (name, mut column) in table.into_iter() {

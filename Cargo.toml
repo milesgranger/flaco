@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 uuid         = "0.8.2"
-arrow2       = { version = "^0.13", features = ["io_ipc"] }
+arrow2       = { version = "^0.13", features = ["io_ipc", "io_parquet"] }
 rust_decimal = { version = "1.16.0", features = ["db-postgres"] }
 time         = { version = "0.3.3",  features = ["formatting"] }
 postgres     = { version = "0.19.1", features = ["with-time-0_3"] }
