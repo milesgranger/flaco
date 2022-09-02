@@ -51,7 +51,7 @@ pub mod postgresql {
             MutableArray, MutableBinaryArray, MutableBooleanArray, MutableFixedSizeBinaryArray,
             MutablePrimitiveArray, MutableUtf8Array,
         },
-        datatypes::{DataType, TimeUnit},
+        datatypes::DataType,
     };
 
     use postgres as pg;
@@ -166,46 +166,38 @@ pub mod postgresql {
                         )?;
                 }
                 &Type::TIMESTAMPTZ => {
-                    let offset = row
-                        .try_get::<_, time::OffsetDateTime>(idx)
-                        .ok()
-                        .map(|v| v.offset().to_string());
                     table
                         .entry(column_name)
-                        .or_insert_with(|| {
-                            Column::new(
-                                MutablePrimitiveArray::<i64>::new()
-                                    .to(DataType::Timestamp(TimeUnit::Microsecond, offset)),
-                            )
-                        })
-                        .push::<_, MutablePrimitiveArray<i64>>(row.try_get(idx).ok())?;
+                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
+                        .push::<_, MutableUtf8Array<i32>>(
+                            row.get::<_, Option<time::OffsetDateTime>>(idx)
+                                .map(|v| v.to_string()),
+                        )?;
                 }
                 &Type::DATE => {
                     table
                         .entry(column_name)
-                        .or_insert_with(|| {
-                            Column::new(MutablePrimitiveArray::<i32>::new().to(DataType::Date32))
-                        })
-                        .push::<_, MutablePrimitiveArray<i32>>(row.try_get(idx).ok())?;
+                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
+                        .push::<_, MutableUtf8Array<i32>>(
+                            row.get::<_, Option<time::Date>>(idx).map(|v| v.to_string()),
+                        )?;
                 }
                 &Type::TIME => {
                     table
                         .entry(column_name)
-                        .or_insert_with(|| {
-                            Column::new(
-                                MutablePrimitiveArray::<i64>::new()
-                                    .to(DataType::Time64(TimeUnit::Microsecond)),
-                            )
-                        })
-                        .push::<_, MutablePrimitiveArray<i64>>(row.try_get(idx).ok())?;
+                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
+                        .push::<_, MutableUtf8Array<i32>>(
+                            row.get::<_, Option<time::Time>>(idx).map(|v| v.to_string()),
+                        )?;
                 }
                 &Type::TIMETZ => {
                     // TIMETZ is 12 bytes; Fixed size binary array then since no DataType matches
                     table
                         .entry(column_name)
-                        .or_insert_with(|| Column::new(MutableFixedSizeBinaryArray::new(12)))
-                        .inner_mut::<MutableFixedSizeBinaryArray>()
-                        .push(row.try_get::<_, Vec<u8>>(idx).ok());
+                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
+                        .push::<_, MutableUtf8Array<i32>>(
+                            row.get::<_, Option<time::Time>>(idx).map(|v| v.to_string()),
+                        )?;
                 }
                 &Type::INTERVAL => {
                     // INTERVAL is 16 bytes; Fixed size binary array then sinece i128 not impl FromSql
