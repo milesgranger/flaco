@@ -16,6 +16,11 @@ bloat upwards of 1GB. Expanding this can cause significant bottle necks in proce
 Since [Arrow](https://github.com/apache/arrow) supports efficient and even larger-than-memory processing,
 as with [dask](https://github.com/dask/dask), [duckdb](https://duckdb.org/), or others.
 Just getting data onto disk is sometimes the hardest part; this aims to make that easier.
+
+NOTE:
+This is still a WIP, and is purpose built for my needs. I intend to generalize it more to be
+useful towards a wider audience. Issues and pull requests welcome!
+
 ---
 
 ### Example

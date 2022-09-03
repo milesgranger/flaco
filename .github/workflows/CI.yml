@@ -39,6 +39,7 @@ jobs:
           profile: minimal
           default: true
       - uses: messense/maturin-action@v1
+        name: Build Wheel
         with:
           maturin-version: latest
           command: build

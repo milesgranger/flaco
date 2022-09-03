@@ -2,4 +2,5 @@ maturin
 pytest
 pandas
 sqlalchemy
+psycopg2-binary
 memory-profiler
