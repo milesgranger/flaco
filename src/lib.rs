@@ -6,14 +6,21 @@ use arrow2::io::{
     ipc::write::{FileWriter, WriteOptions},
     parquet,
 };
+use pyo3::create_exception;
+use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 
+pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+create_exception!(flaco, FlacoException, PyException);
+
 #[pymodule]
-fn flaco(_py: Python, m: &PyModule) -> PyResult<()> {
+fn flaco(py: Python, m: &PyModule) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(read_sql_to_file, m)?)?;
     m.add_class::<FileFormat>()?;
+    m.add("FlacoException", py.get_type::<FlacoException>())?;
     Ok(())
 }
 
@@ -24,19 +31,24 @@ pub enum FileFormat {
     Parquet,
 }
 
+#[inline(always)]
+fn to_py_err(err: impl ToString) -> PyErr {
+    PyErr::new::<FlacoException, _>(err.to_string())
+}
+
 /// Stream data into a file
 #[pyfunction]
 pub fn read_sql_to_file(uri: &str, stmt: &str, path: &str, format: FileFormat) -> PyResult<()> {
-    let mut client = postgres::Client::connect(uri, postgres::NoTls).unwrap();
-    let table = postgresql::read_sql(&mut client, stmt).unwrap();
+    let mut client = postgres::Client::connect(uri, postgres::NoTls).map_err(to_py_err)?;
+    let table = postgresql::read_sql(&mut client, stmt).map_err(to_py_err)?;
     match format {
-        FileFormat::Feather => write_table_to_feather(table, path)?,
-        FileFormat::Parquet => write_table_to_parquet(table, path)?,
+        FileFormat::Feather => write_table_to_feather(table, path).map_err(to_py_err)?,
+        FileFormat::Parquet => write_table_to_parquet(table, path).map_err(to_py_err)?,
     }
     Ok(())
 }
 
-fn write_table_to_parquet(table: postgresql::Table, path: &str) -> PyResult<()> {
+fn write_table_to_parquet(table: postgresql::Table, path: &str) -> Result<()> {
     let mut fields = vec![];
     let mut arrays = vec![];
     for (name, mut column) in table.into_iter() {
@@ -60,18 +72,17 @@ fn write_table_to_parquet(table: postgresql::Table, path: &str) -> PyResult<()> 
         &schema,
         options,
         encodings,
-    )
-    .unwrap();
+    )?;
     let file = File::create(path)?;
-    let mut writer = parquet::write::FileWriter::try_new(file, schema, options).unwrap();
+    let mut writer = parquet::write::FileWriter::try_new(file, schema, options)?;
     for group in row_groups {
-        writer.write(group.unwrap()).unwrap();
+        writer.write(group?)?;
     }
-    writer.end(None).unwrap();
+    writer.end(None)?;
     Ok(())
 }
 
-fn write_table_to_feather(table: postgresql::Table, path: &str) -> PyResult<()> {
+fn write_table_to_feather(table: postgresql::Table, path: &str) -> Result<()> {
     let mut fields = vec![];
     let mut arrays = vec![];
     for (name, mut column) in table.into_iter() {
@@ -82,16 +93,17 @@ fn write_table_to_feather(table: postgresql::Table, path: &str) -> PyResult<()> 
     let options = WriteOptions { compression: None };
 
     let file = File::create(path.to_string())?;
-    let mut writer = FileWriter::try_new(file, &schema, None, options).unwrap();
+    let mut writer = FileWriter::try_new(file, &schema, None, options)?;
 
-    let chunk = Chunk::try_new(arrays).unwrap();
-    writer.write(&chunk, None).unwrap();
-    writer.finish().unwrap();
+    let chunk = Chunk::try_new(arrays)?;
+    writer.write(&chunk, None)?;
+    writer.finish()?;
 
     Ok(())
 }
 
 pub mod postgresql {
+    use super::Result;
     use arrow2::{
         array,
         array::{
@@ -108,7 +120,6 @@ pub mod postgresql {
     use std::{iter::Iterator, net::IpAddr};
     use time;
 
-    pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
     pub type Table = BTreeMap<String, Column>;
 
     pub struct Column {
