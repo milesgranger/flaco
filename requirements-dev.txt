@@ -1,5 +1,6 @@
 maturin
 pytest
+pyarrow
 pandas
 sqlalchemy
 psycopg2-binary
