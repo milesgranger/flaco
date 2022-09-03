@@ -104,8 +104,8 @@ pub mod postgresql {
     use postgres as pg;
     use postgres::fallible_iterator::FallibleIterator;
     use postgres::types::Type;
-    use std::iter::Iterator;
     use std::{any::Any, collections::BTreeMap};
+    use std::{iter::Iterator, net::IpAddr};
     use time;
 
     pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -159,49 +159,72 @@ pub mod postgresql {
                     table
                         .entry(column_name)
                         .or_insert_with(|| Column::new(MutableBooleanArray::new()))
-                        .push::<_, MutableBooleanArray>(row.try_get(idx).ok())?;
+                        .push::<_, MutableBooleanArray>(row.get::<_, Option<bool>>(idx))?;
                 }
                 &Type::CHAR => {
                     table
                         .entry(column_name)
                         .or_insert_with(|| Column::new(MutablePrimitiveArray::<i8>::new()))
-                        .push::<_, MutablePrimitiveArray<i8>>(row.try_get(idx).ok())?;
+                        .push::<_, MutablePrimitiveArray<i8>>(row.get::<_, Option<i8>>(idx))?;
                 }
-                &Type::TEXT | &Type::VARCHAR | &Type::UNKNOWN | &Type::NAME => {
+                &Type::TEXT | &Type::VARCHAR | &Type::UNKNOWN | &Type::NAME | &Type::BPCHAR => {
                     table
                         .entry(column_name)
                         .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
-                        .push::<_, MutableUtf8Array<i32>>(row.try_get::<_, String>(idx).ok())?;
+                        .push::<_, MutableUtf8Array<i32>>(row.get::<_, Option<String>>(idx))?;
+                }
+                &Type::JSON | &Type::JSONB => {
+                    table
+                        .entry(column_name)
+                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
+                        .push::<_, MutableUtf8Array<i32>>(
+                            row.get::<_, Option<serde_json::Value>>(idx)
+                                .map(|v| v.to_string()),
+                        )?;
+                }
+                &Type::OID => {
+                    table
+                        .entry(column_name)
+                        .or_insert_with(|| Column::new(MutablePrimitiveArray::<u32>::new()))
+                        .push::<_, MutablePrimitiveArray<u32>>(row.get::<_, Option<u32>>(idx))?;
+                }
+                &Type::UUID => {
+                    table
+                        .entry(column_name)
+                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
+                        .push::<_, MutableUtf8Array<i32>>(
+                            row.get::<_, Option<IpAddr>>(idx).map(|v| v.to_string()),
+                        )?;
                 }
                 &Type::INT2 => {
                     table
                         .entry(column_name)
                         .or_insert_with(|| Column::new(MutablePrimitiveArray::<i16>::new()))
-                        .push::<_, MutablePrimitiveArray<i16>>(row.try_get(idx).ok())?;
+                        .push::<_, MutablePrimitiveArray<i16>>(row.get::<_, Option<i16>>(idx))?;
                 }
                 &Type::INT4 => {
                     table
                         .entry(column_name)
                         .or_insert_with(|| Column::new(MutablePrimitiveArray::<i32>::new()))
-                        .push::<_, MutablePrimitiveArray<i32>>(row.try_get(idx).ok())?;
+                        .push::<_, MutablePrimitiveArray<i32>>(row.get::<_, Option<i32>>(idx))?;
                 }
                 &Type::INT8 => {
                     table
                         .entry(column_name)
                         .or_insert_with(|| Column::new(MutablePrimitiveArray::<i64>::new()))
-                        .push::<_, MutablePrimitiveArray<i64>>(row.try_get(idx).ok())?;
+                        .push::<_, MutablePrimitiveArray<i64>>(row.get::<_, Option<i64>>(idx))?;
                 }
                 &Type::FLOAT4 => {
                     table
                         .entry(column_name)
                         .or_insert_with(|| Column::new(MutablePrimitiveArray::<f32>::new()))
-                        .push::<_, MutablePrimitiveArray<f32>>(row.try_get(idx).ok())?;
+                        .push::<_, MutablePrimitiveArray<f32>>(row.get::<_, Option<f32>>(idx))?;
                 }
                 &Type::FLOAT8 => {
                     table
                         .entry(column_name)
                         .or_insert_with(|| Column::new(MutablePrimitiveArray::<f64>::new()))
-                        .push::<_, MutablePrimitiveArray<f64>>(row.try_get(idx).ok())?;
+                        .push::<_, MutablePrimitiveArray<f64>>(row.get::<_, Option<f64>>(idx))?;
                 }
                 &Type::TIMESTAMP => {
                     table
@@ -252,7 +275,7 @@ pub mod postgresql {
                         .entry(column_name)
                         .or_insert_with(|| Column::new(MutableFixedSizeBinaryArray::new(16)))
                         .inner_mut::<MutableFixedSizeBinaryArray>()
-                        .push(row.try_get::<_, Vec<u8>>(idx).ok());
+                        .push(row.get::<_, Option<Vec<u8>>>(idx));
                 }
                 _ => unimplemented!(
                     "Type {} not implemented, consider opening an issue or casting to text.",
