@@ -1,15 +1,14 @@
-use std::fs::File;
-
 use arrow2::chunk::Chunk;
-use arrow2::datatypes::Schema;
-use arrow2::io::{
-    ipc::write::{FileWriter, WriteOptions},
-    parquet,
-};
+use arrow2::datatypes::{DataType, Schema};
+use arrow2::io::{ipc, parquet};
+use arrow2::{array, array::MutableArray};
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
+use std::any::Any;
+use std::collections::BTreeMap;
+use std::fs::File;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -36,7 +35,7 @@ fn to_py_err(err: impl ToString) -> PyErr {
     PyErr::new::<FlacoException, _>(err.to_string())
 }
 
-/// Stream data into a file
+// TODO: Stream data into a file in chunks during query reading
 #[pyfunction]
 pub fn read_sql_to_file(uri: &str, stmt: &str, path: &str, format: FileFormat) -> PyResult<()> {
     let mut client = postgres::Client::connect(uri, postgres::NoTls).map_err(to_py_err)?;
@@ -48,7 +47,33 @@ pub fn read_sql_to_file(uri: &str, stmt: &str, path: &str, format: FileFormat) -
     Ok(())
 }
 
-fn write_table_to_parquet(table: postgresql::Table, path: &str) -> Result<()> {
+pub type Table = BTreeMap<String, Column>;
+
+pub struct Column {
+    pub array: Box<dyn MutableArray>,
+    pub dtype: DataType,
+}
+
+impl Column {
+    pub fn new(array: impl MutableArray + 'static) -> Self {
+        Self {
+            dtype: array.data_type().clone(),
+            array: Box::new(array),
+        }
+    }
+    pub fn dtype(&self) -> &DataType {
+        &self.dtype
+    }
+    pub fn inner_mut<T: Any + 'static>(&mut self) -> &mut T {
+        self.array.as_mut_any().downcast_mut::<T>().unwrap()
+    }
+    pub fn push<V, T: array::TryPush<V> + Any + 'static>(&mut self, value: V) -> Result<()> {
+        self.inner_mut::<T>().try_push(value)?;
+        Ok(())
+    }
+}
+
+fn write_table_to_parquet(table: Table, path: &str) -> Result<()> {
     let mut fields = vec![];
     let mut arrays = vec![];
     for (name, mut column) in table.into_iter() {
@@ -82,7 +107,7 @@ fn write_table_to_parquet(table: postgresql::Table, path: &str) -> Result<()> {
     Ok(())
 }
 
-fn write_table_to_feather(table: postgresql::Table, path: &str) -> Result<()> {
+fn write_table_to_feather(table: Table, path: &str) -> Result<()> {
     let mut fields = vec![];
     let mut arrays = vec![];
     for (name, mut column) in table.into_iter() {
@@ -90,10 +115,10 @@ fn write_table_to_feather(table: postgresql::Table, path: &str) -> Result<()> {
         arrays.push(column.array.as_box());
     }
     let schema = Schema::from(fields);
-    let options = WriteOptions { compression: None };
+    let options = ipc::write::WriteOptions { compression: None };
 
     let file = File::create(path.to_string())?;
-    let mut writer = FileWriter::try_new(file, &schema, None, options)?;
+    let mut writer = ipc::write::FileWriter::try_new(file, &schema, None, options)?;
 
     let chunk = Chunk::try_new(arrays)?;
     writer.write(&chunk, None)?;
@@ -103,48 +128,18 @@ fn write_table_to_feather(table: postgresql::Table, path: &str) -> Result<()> {
 }
 
 pub mod postgresql {
-    use super::Result;
-    use arrow2::{
-        array,
-        array::{
-            MutableArray, MutableBinaryArray, MutableBooleanArray, MutableFixedSizeBinaryArray,
-            MutablePrimitiveArray, MutableUtf8Array,
-        },
-        datatypes::DataType,
+    use super::{Column, Result, Table};
+    use arrow2::array::{
+        MutableBinaryArray, MutableBooleanArray, MutableFixedSizeBinaryArray,
+        MutablePrimitiveArray, MutableUtf8Array,
     };
 
     use postgres as pg;
     use postgres::fallible_iterator::FallibleIterator;
     use postgres::types::Type;
-    use std::{any::Any, collections::BTreeMap};
+    use std::collections::BTreeMap;
     use std::{iter::Iterator, net::IpAddr};
     use time;
-
-    pub type Table = BTreeMap<String, Column>;
-
-    pub struct Column {
-        pub array: Box<dyn MutableArray>,
-        pub dtype: DataType,
-    }
-
-    impl Column {
-        pub fn new(array: impl MutableArray + 'static) -> Self {
-            Self {
-                dtype: array.data_type().clone(),
-                array: Box::new(array),
-            }
-        }
-        pub fn dtype(&self) -> &DataType {
-            &self.dtype
-        }
-        pub fn inner_mut<T: Any + 'static>(&mut self) -> &mut T {
-            self.array.as_mut_any().downcast_mut::<T>().unwrap()
-        }
-        pub fn push<V, T: array::TryPush<V> + Any + 'static>(&mut self, value: V) -> Result<()> {
-            self.inner_mut::<T>().try_push(value)?;
-            Ok(())
-        }
-    }
 
     pub fn read_sql(client: &mut pg::Client, sql: &str) -> Result<Table> {
         let mut row_iter = client.query_raw::<_, &i32, _>(sql, &[])?;
