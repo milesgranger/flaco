@@ -12,7 +12,49 @@ on:
       - edited
 
 jobs:
+  test:
+    services:
+      postgres:
+        image: postgres:12
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - uses: actions/setup-python@v2
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          default: true
+      - uses: messense/maturin-action@v1
+        name: Build Wheel
+        with:
+          maturin-version: latest
+          command: build
+          args: --release --out dist
+      - name: Install
+        run: |
+          python -m pip install flaco --no-index --find-links dist --force-reinstall
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+      - name: Load test data
+        run: make load-data
+      - name: Test
+        run: python -m pytest -v tests/
+  
   macos:
+    needs: [test]
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -60,6 +102,7 @@ jobs:
           path: dist
         
   windows:
+    needs: [test]
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -103,18 +146,7 @@ jobs:
           path: dist
         
   linux:
-    services:
-      postgres:
-        image: postgres:12
-        env:
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
+    needs: [test]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -146,8 +178,7 @@ jobs:
       if: matrix.target == 'x86_64'
       run: |
         pip install flaco --no-index --find-links dist --force-reinstall
-        pip install -r requirements-dev.txt
-        python -m pytest -v tests
+        python -c "import flaco"
     - name: Upload wheels
       uses: actions/upload-artifact@v2
       with:
