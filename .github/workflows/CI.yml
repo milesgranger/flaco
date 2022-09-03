@@ -13,18 +13,6 @@ on:
 
 jobs:
   macos:
-    services:
-      postgres:
-        image: postgres:12
-        env:
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
     runs-on: macos-latest
     strategy:
       matrix:
@@ -63,9 +51,7 @@ jobs:
         run: |
           pip install flaco --no-index --find-links dist --force-reinstall
       - name: Python UnitTest
-        run: |
-          pip install -r requirements-dev.txt
-          python -m pytest -v tests
+        run: python -c "import flaco"
       - name: Upload wheels
         uses: actions/upload-artifact@v2
         with:
@@ -73,18 +59,6 @@ jobs:
           path: dist
         
   windows:
-    services:
-      postgres:
-        image: postgres:12
-        env:
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
     runs-on: windows-latest
     strategy:
       matrix:
@@ -119,9 +93,7 @@ jobs:
         run: |
           pip install flaco --no-index --find-links dist --force-reinstall
       - name: Python UnitTest
-        run: |
-          pip install -r requirements-dev.txt
-          python -m pytest -v tests
+        run: python -c "import flaco"
       - name: Upload wheels
         uses: actions/upload-artifact@v2
         with:
@@ -178,3 +150,23 @@ jobs:
       with:
         name: wheels
         path: dist
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    if: "startsWith(github.ref, 'refs/tags/')"
+    needs: [ build, test ]
+    steps:
+      - uses: actions/download-artifact@v2
+        with:
+          name: wheels
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+      - name: Publish to PyPi
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TWINE_TOKEN }}
+        run: |
+          pip install --upgrade wheel pip setuptools twine
+          twine upload --skip-existing *
