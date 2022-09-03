@@ -1,0 +1,5 @@
+maturin
+pytest
+pandas
+sqlalchemy
+memory-profiler
