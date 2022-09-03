@@ -3,7 +3,8 @@ import pytest
 import pandas as pd
 import numpy as np
 from sqlalchemy import create_engine
-from flaco.io import read_sql, Database, FlacoException
+
+from flaco import read_sql_to_file, FileFormat, FlacoException
 
 
 @pytest.mark.parametrize(
@@ -15,7 +16,7 @@ from flaco.io import read_sql, Database, FlacoException
         "city",
         "country",
         "customer",
-        "film",  # unsupported custom `mpaa_rating` TODO: support arbitrary types by serializing to string?
+        # "film",  # unsupported custom `mpaa_rating` TODO: support arbitrary types by serializing to string?
         "film_actor",
         "film_category",
         "inventory",
@@ -26,57 +27,38 @@ from flaco.io import read_sql, Database, FlacoException
         "store",
     ),
 )
-def test_basic_select_all_tables(postgresdb_connection_uri, table):
+@pytest.mark.parametrize("format", (FileFormat.Feather, FileFormat.Parquet))
+def test_basic_select_all_tables(postgresdb_connection_uri, tmpdir, table, format):
 
     query = f"select * from {table}"
 
     df1 = pd.read_sql_table(table, con=create_engine(postgresdb_connection_uri))
 
-    with Database(postgresdb_connection_uri) as db:
-        if table == "film":
-            # there is a custom type called 'tsvector'; we should catch
-            # unimplemented type conversions.
-            with pytest.raises(FlacoException):
-                read_sql(query, db)
-            return
-        else:
-            data = read_sql(query, db)
-    df2 = pd.DataFrame(data, copy=False)
+    out = str(tmpdir / "out.data")
+    read_sql_to_file(postgresdb_connection_uri, query, out, format)
+    if format == FileFormat.Feather:
+        df2 = pd.read_feather(out)
+    elif format == FileFormat.Parquet:
+        df2 = pd.read_parquet(out)
 
     assert set(df1.columns) == set(df2.columns)
     assert len(df1.columns) == len(df2.columns)
+    assert len(df1) == len(df2)
 
 
-def test_simple_timing(postgresdb_engine, postgresdb_connection_uri, simple_table):
-
-    scope = dict(pd=pd, read_sql=read_sql, postgresdb_engine=postgresdb_engine)
-
-    t1 = timeit.timeit(
-        f"pd.read_sql('select * from {simple_table}', con=postgresdb_engine)",
-        globals=scope,
-        number=5,
-    )
-    print(t1)
-
-    with Database(postgresdb_connection_uri) as con:
-        scope["con"] = con
-        t2 = timeit.timeit(
-            f"""read_sql("select * from {simple_table}", con)""",
-            globals=scope,
-            number=5,
-        )
-    print(t2)
-
-    # faster than pandas by at least 1/3rd
-    assert t1 > t2 * 0.66
-
-
-def test_simple_group_by(postgresdb_engine, postgresdb_connection_uri, simple_table):
+def test_simple_group_by(
+    postgresdb_engine, postgresdb_connection_uri, simple_table, tmpdir
+):
     df1 = pd.read_sql_table(simple_table, con=postgresdb_engine)
 
-    with Database(postgresdb_connection_uri) as con:
-        data = read_sql(f"select * from {simple_table}", con)
-    df2 = pd.DataFrame(data, copy=False)
+    out = str(tmpdir / "out.feather")
+    read_sql_to_file(
+        postgresdb_connection_uri,
+        f"select * from {simple_table}",
+        out,
+        FileFormat.Feather,
+    )
+    df2 = pd.read_feather(out)
 
     # just numeric columns
     df1_group = df1.groupby("col1").sum()
@@ -89,7 +71,7 @@ def test_simple_group_by(postgresdb_engine, postgresdb_connection_uri, simple_ta
     assert df1_group.equals(df2_group)
 
 
-def test_mixed_types_and_nulls(postgresdb_engine, postgresdb_connection_uri):
+def test_mixed_types_and_nulls(postgresdb_engine, postgresdb_connection_uri, tmpdir):
     table = "test_table"
     n_rows = 5_000
     engine = postgresdb_engine
@@ -107,36 +89,24 @@ def test_mixed_types_and_nulls(postgresdb_engine, postgresdb_connection_uri):
     df.to_sql(table, index=False, con=engine, if_exists="append")
 
     # This should work fine
-    with Database(postgresdb_connection_uri) as con:
-        data = read_sql(f"select * from {table}", con)
+    out = str(tmpdir / "out.feather")
+    read_sql_to_file(
+        postgresdb_connection_uri, f"select * from test_table", out, FileFormat.Feather
+    )
+    df = pd.read_feather(out).convert_dtypes()
 
     # Last two rows should all be None, but nothing else
-    df = pd.DataFrame(data)
     assert df.loc[len(df) - 2 :, :].isna().all().all()
     assert not df.loc[: len(df) - 2, :].isna().all().all()
 
-    # int columns were converted to object dtype, but non-null vals are 'int'
-    assert isinstance(df.col1[0], int)
-    assert isinstance(df.col2[0], int)
-
-    # floats are still the same numpy type
-    assert isinstance(df.col3[0], np.float32)
-    assert isinstance(df.col4[0], np.float64)
-
-
-def test_query_without_connect_error(postgresdb_connection_uri):
-    db = Database(postgresdb_connection_uri)
-    with pytest.raises(FlacoException):
-        read_sql("select * from payment", db)
-
 
 def test_query_error(postgresdb_connection_uri):
-    with Database(postgresdb_connection_uri) as db:
-        with pytest.raises(FlacoException):
-            read_sql("not a valid query", db)
-
-
-def test_bad_connection_error(postgresdb_connection_uri):
     with pytest.raises(FlacoException):
-        with Database("bad-uri"):
-            pass
+        read_sql_to_file(
+            postgresdb_connection_uri, "select fail", "out", FileFormat.Feather
+        )
+
+
+def test_bad_connection_error():
+    with pytest.raises(FlacoException):
+        read_sql_to_file("baduri", "select fail", "out", FileFormat.Feather)

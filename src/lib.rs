@@ -137,6 +137,7 @@ pub mod postgresql {
     use postgres as pg;
     use postgres::fallible_iterator::FallibleIterator;
     use postgres::types::Type;
+    use rust_decimal::{prelude::ToPrimitive, Decimal};
     use std::collections::BTreeMap;
     use std::{iter::Iterator, net::IpAddr};
     use time;
@@ -283,6 +284,13 @@ pub mod postgresql {
                         .inner_mut::<MutableFixedSizeBinaryArray>()
                         .push(row.get::<_, Option<Vec<u8>>>(idx));
                 }
+                &Type::NUMERIC => table
+                    .entry(column_name)
+                    .or_insert_with(|| Column::new(MutablePrimitiveArray::<f64>::new()))
+                    .push::<_, MutablePrimitiveArray<f64>>(
+                        row.get::<_, Option<Decimal>>(idx)
+                            .map(|v| v.to_f64().unwrap_or_else(|| f64::NAN)),
+                    )?,
                 _ => unimplemented!(
                     "Type {} not implemented, consider opening an issue or casting to text.",
                     column.type_()
