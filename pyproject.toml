@@ -1,12 +1,3 @@
 [build-system]
-requires = ["Cython", "setuptools", "wheel", "numpy"]
-
-
-# https://cibuildwheel.readthedocs.io/en/stable/options/#configuration-file
-[tool.cibuildwheel]
-# musllinx fails with: ImportError: Error relocating /tmp/tmp.FlCAoE/venv/lib/python3.6/site-packages/flaco/io.cpython-36m-x86_64-linux-gnu.so: __res_init: symbol not found
-skip = ["*-musllinux*"]
-test-command = 'python -c "from flaco.io import read_sql, Database"'
-
-[tool.cibuildwheel.linux]
-before-all = "rm -rf build target/release/deps/"
+requires = ["setuptools", "wheel"]
+build-backend = "maturin"

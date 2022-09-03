@@ -1,24 +1,26 @@
 [package]
 name    = "flaco"
-version = "0.5.1"
+version = "0.6.0"
 edition = "2018"
 license = "Unlicense/MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-crate-type = ["staticlib"]
+crate-type = ["cdylib"]
+
+[features]
+default = ["extension-module"]
+extension-module = ["pyo3/extension-module"]
 
 [dependencies]
-bumpalo      = "3.8.0"
 uuid         = "0.8.2"
-serde_json   = "1.0.68"
+serde_json   = "^1"
+arrow2       = { version = "^0.13", features = ["io_ipc", "io_parquet", "io_ipc_compression"] }
 rust_decimal = { version = "1.16.0", features = ["db-postgres"] }
 time         = { version = "0.3.3",  features = ["formatting"] }
-postgres     = { version = "0.19.1", features = ["with-serde_json-1", "with-time-0_3", "with-uuid-0_8"] }
+postgres     = { version = "0.19.1", features = ["with-time-0_3", "with-serde_json-1", "with-uuid-0_8"] }
 postgres-protocol = "0.6.2"
-
-[build-dependencies]
-cbindgen = "^0.6.0"
+pyo3         = { version = "0.17", default-features = false, features = ["macros"] }
 
 [profile.dev]
 lto   = false
