@@ -15,6 +15,7 @@ extension-module = ["pyo3/extension-module"]
 [dependencies]
 uuid         = "0.8.2"
 serde_json   = "^1"
+numpy        = "0.17"
 arrow2       = { version = "^0.13", features = ["io_ipc", "io_parquet", "io_ipc_compression"] }
 rust_decimal = { version = "1.16.0", features = ["db-postgres"] }
 time         = { version = "0.3.3",  features = ["formatting"] }

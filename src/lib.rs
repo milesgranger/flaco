@@ -2,6 +2,7 @@ use arrow2::chunk::Chunk;
 use arrow2::datatypes::{DataType, Schema};
 use arrow2::io::{ipc, parquet};
 use arrow2::{array, array::MutableArray};
+use numpy as np;
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
@@ -47,6 +48,12 @@ pub fn read_sql_to_file(uri: &str, stmt: &str, path: &str, format: FileFormat) -
     Ok(())
 }
 
+pub fn read_sql_to_numpy(uri: &str, stmt: &str) -> Result<()> {
+    let mut client = postgres::Client::connect(uri, postgres::NoTls).map_err(to_py_err)?;
+    let table = postgresql::read_sql(&mut client, stmt).map_err(to_py_err)?;
+    Ok(())
+}
+
 pub type Table = BTreeMap<String, Column>;
 
 pub struct Column {
@@ -71,6 +78,10 @@ impl Column {
         self.inner_mut::<T>().try_push(value)?;
         Ok(())
     }
+}
+
+fn column_into_numpy_array(py: Python, col: Column) -> &np::PyArray1<PyObject> {
+    np::PyArray::from_iter(py, vec![0, 1, 2].iter().map(|v| v.to_object(py)))
 }
 
 fn write_table_to_parquet(table: Table, path: &str) -> Result<()> {

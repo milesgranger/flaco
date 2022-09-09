@@ -128,10 +128,10 @@ def memory_profile():
     #table = pq.read_table('result.parquet', memory_map=True).to_pandas()
     with pa.memory_map('result.feather', 'rb') as source:
         mytable = pa.ipc.open_file(source).read_all()
-        cur = duckdb.connect()
-        v = cur.execute('select count(*) from mytable').fetchall()
-        print(v)
+        table = mytable.rename_columns([f"col_{i}" for i in range(10)])
+        #print(v)
         print(type(mytable), len(mytable))
+        print(type(table), len(table))
         print(pa.total_allocated_bytes() >> 20)
     #engine = create_engine(DB_URI)
     #_pandas_df = pd.read_sql(stmt, engine)
