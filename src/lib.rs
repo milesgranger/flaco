@@ -1,4 +1,7 @@
-use arrow2::array::{BinaryArray, BooleanArray, FixedSizeBinaryArray, PrimitiveArray, Utf8Array};
+use arrow2::array::{
+    BinaryArray, MutableBinaryArray, MutableBooleanArray, MutableFixedSizeBinaryArray,
+    MutablePrimitiveArray, MutableUtf8Array, Utf8Array,
+};
 use arrow2::chunk::Chunk;
 use arrow2::datatypes::{DataType, Schema};
 use arrow2::io::{ipc, parquet};
@@ -93,76 +96,86 @@ impl Column {
         self.inner_mut::<T>().try_push(value)?;
         Ok(())
     }
-    pub fn into_pyarray(self, py: Python) -> &np::PyArray1<PyObject> {
+    pub fn into_pyarray(mut self, py: Python) -> &np::PyArray1<PyObject> {
         match self.dtype {
             DataType::Boolean => self
-                .inner::<BooleanArray>()
+                .inner::<MutableBooleanArray>()
                 .iter()
                 .map(|v| v.to_object(py))
                 .collect::<Vec<PyObject>>()
                 .into_pyarray(py),
             DataType::Binary => self
-                .inner::<BinaryArray<i32>>()
+                .inner_mut::<MutableBinaryArray<i32>>()
+                .as_arc()
+                .as_ref()
+                .as_any()
+                .downcast_ref::<BinaryArray<i32>>()
+                .unwrap()
                 .iter()
                 .map(|v| v.to_object(py))
                 .collect::<Vec<PyObject>>()
                 .into_pyarray(py),
             DataType::Utf8 => self
-                .inner::<Utf8Array<i32>>()
+                .inner_mut::<MutableUtf8Array<i32>>()
+                .as_arc()
+                .as_ref()
+                .as_any()
+                .downcast_ref::<Utf8Array<i32>>()
+                .unwrap()
                 .iter()
                 .map(|v| v.to_object(py))
                 .collect::<Vec<PyObject>>()
                 .into_pyarray(py),
             DataType::Int8 => self
-                .inner::<PrimitiveArray<i8>>()
+                .inner::<MutablePrimitiveArray<i8>>()
                 .iter()
                 .map(|v| v.to_object(py))
                 .collect::<Vec<PyObject>>()
                 .into_pyarray(py),
             DataType::Int16 => self
-                .inner::<PrimitiveArray<i16>>()
+                .inner::<MutablePrimitiveArray<i16>>()
                 .iter()
                 .map(|v| v.to_object(py))
                 .collect::<Vec<PyObject>>()
                 .into_pyarray(py),
             DataType::Int32 => self
-                .inner::<PrimitiveArray<i32>>()
+                .inner::<MutablePrimitiveArray<i32>>()
                 .iter()
                 .map(|v| v.to_object(py))
                 .collect::<Vec<PyObject>>()
                 .into_pyarray(py),
             DataType::UInt32 => self
-                .inner::<PrimitiveArray<u32>>()
+                .inner::<MutablePrimitiveArray<u32>>()
                 .iter()
                 .map(|v| v.to_object(py))
                 .collect::<Vec<PyObject>>()
                 .into_pyarray(py),
             DataType::Int64 => self
-                .inner::<PrimitiveArray<i64>>()
+                .inner::<MutablePrimitiveArray<i64>>()
                 .iter()
                 .map(|v| v.to_object(py))
                 .collect::<Vec<PyObject>>()
                 .into_pyarray(py),
             DataType::UInt64 => self
-                .inner::<PrimitiveArray<u64>>()
+                .inner::<MutablePrimitiveArray<u64>>()
                 .iter()
                 .map(|v| v.to_object(py))
                 .collect::<Vec<PyObject>>()
                 .into_pyarray(py),
             DataType::Float32 => self
-                .inner::<PrimitiveArray<f32>>()
+                .inner::<MutablePrimitiveArray<f32>>()
                 .iter()
                 .map(|v| v.to_object(py))
                 .collect::<Vec<PyObject>>()
                 .into_pyarray(py),
             DataType::Float64 => self
-                .inner::<PrimitiveArray<f64>>()
+                .inner::<MutablePrimitiveArray<f64>>()
                 .iter()
                 .map(|v| v.to_object(py))
                 .collect::<Vec<PyObject>>()
                 .into_pyarray(py),
             DataType::FixedSizeBinary(_) => self
-                .inner::<FixedSizeBinaryArray>()
+                .inner::<MutableFixedSizeBinaryArray>()
                 .iter()
                 .map(|v| v.to_object(py))
                 .collect::<Vec<PyObject>>()
