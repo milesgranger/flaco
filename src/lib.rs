@@ -1,9 +1,10 @@
-use arrow2::array::{BinaryArray, BooleanArray, MutableBinaryArray, MutableBooleanArray};
+use arrow2::array::{BinaryArray, BooleanArray, FixedSizeBinaryArray, PrimitiveArray, Utf8Array};
 use arrow2::chunk::Chunk;
 use arrow2::datatypes::{DataType, Schema};
 use arrow2::io::{ipc, parquet};
 use arrow2::{array, array::MutableArray};
 use numpy as np;
+use numpy::IntoPyArray;
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
@@ -20,6 +21,7 @@ create_exception!(flaco, FlacoException, PyException);
 fn flaco(py: Python, m: &PyModule) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(read_sql_to_file, m)?)?;
+    m.add_function(wrap_pyfunction!(read_sql_to_numpy, m)?)?;
     m.add_class::<FileFormat>()?;
     m.add("FlacoException", py.get_type::<FlacoException>())?;
     Ok(())
@@ -49,10 +51,19 @@ pub fn read_sql_to_file(uri: &str, stmt: &str, path: &str, format: FileFormat) -
     Ok(())
 }
 
-pub fn read_sql_to_numpy(uri: &str, stmt: &str) -> Result<()> {
+#[pyfunction]
+pub fn read_sql_to_numpy<'a, 'py>(
+    py: Python<'py>,
+    uri: &'a str,
+    stmt: &'a str,
+) -> PyResult<BTreeMap<String, &'py np::PyArray1<PyObject>>> {
     let mut client = postgres::Client::connect(uri, postgres::NoTls).map_err(to_py_err)?;
     let table = postgresql::read_sql(&mut client, stmt).map_err(to_py_err)?;
-    Ok(())
+    let mut result = BTreeMap::new();
+    for (name, column) in table {
+        result.insert(name, column.into_pyarray(py));
+    }
+    Ok(result)
 }
 
 pub type Table = BTreeMap<String, Column>;
@@ -82,29 +93,86 @@ impl Column {
         self.inner_mut::<T>().try_push(value)?;
         Ok(())
     }
-    pub fn into_pyobjects(self, py: Python) -> Vec<PyObject> {
+    pub fn into_pyarray(self, py: Python) -> &np::PyArray1<PyObject> {
         match self.dtype {
             DataType::Boolean => self
                 .inner::<BooleanArray>()
                 .iter()
                 .map(|v| v.to_object(py))
-                .collect(),
+                .collect::<Vec<PyObject>>()
+                .into_pyarray(py),
             DataType::Binary => self
                 .inner::<BinaryArray<i32>>()
                 .iter()
                 .map(|v| v.to_object(py))
-                .collect(),
+                .collect::<Vec<PyObject>>()
+                .into_pyarray(py),
+            DataType::Utf8 => self
+                .inner::<Utf8Array<i32>>()
+                .iter()
+                .map(|v| v.to_object(py))
+                .collect::<Vec<PyObject>>()
+                .into_pyarray(py),
+            DataType::Int8 => self
+                .inner::<PrimitiveArray<i8>>()
+                .iter()
+                .map(|v| v.to_object(py))
+                .collect::<Vec<PyObject>>()
+                .into_pyarray(py),
+            DataType::Int16 => self
+                .inner::<PrimitiveArray<i16>>()
+                .iter()
+                .map(|v| v.to_object(py))
+                .collect::<Vec<PyObject>>()
+                .into_pyarray(py),
+            DataType::Int32 => self
+                .inner::<PrimitiveArray<i32>>()
+                .iter()
+                .map(|v| v.to_object(py))
+                .collect::<Vec<PyObject>>()
+                .into_pyarray(py),
+            DataType::UInt32 => self
+                .inner::<PrimitiveArray<u32>>()
+                .iter()
+                .map(|v| v.to_object(py))
+                .collect::<Vec<PyObject>>()
+                .into_pyarray(py),
+            DataType::Int64 => self
+                .inner::<PrimitiveArray<i64>>()
+                .iter()
+                .map(|v| v.to_object(py))
+                .collect::<Vec<PyObject>>()
+                .into_pyarray(py),
+            DataType::UInt64 => self
+                .inner::<PrimitiveArray<u64>>()
+                .iter()
+                .map(|v| v.to_object(py))
+                .collect::<Vec<PyObject>>()
+                .into_pyarray(py),
+            DataType::Float32 => self
+                .inner::<PrimitiveArray<f32>>()
+                .iter()
+                .map(|v| v.to_object(py))
+                .collect::<Vec<PyObject>>()
+                .into_pyarray(py),
+            DataType::Float64 => self
+                .inner::<PrimitiveArray<f64>>()
+                .iter()
+                .map(|v| v.to_object(py))
+                .collect::<Vec<PyObject>>()
+                .into_pyarray(py),
+            DataType::FixedSizeBinary(_) => self
+                .inner::<FixedSizeBinaryArray>()
+                .iter()
+                .map(|v| v.to_object(py))
+                .collect::<Vec<PyObject>>()
+                .into_pyarray(py),
             _ => unimplemented!(
                 "Dtype: {:?} not implemented for conversion to numpy",
                 &self.dtype
             ),
         }
     }
-}
-
-fn column_into_numpy_array(py: Python, col: Column) -> &np::PyArray1<PyObject> {
-    unimplemented!()
-    //np::PyArray::from_iter(py, iter)
 }
 
 fn write_table_to_parquet(table: Table, path: &str) -> Result<()> {
