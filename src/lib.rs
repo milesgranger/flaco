@@ -1,3 +1,4 @@
+use arrow2::array::{BinaryArray, BooleanArray, MutableBinaryArray, MutableBooleanArray};
 use arrow2::chunk::Chunk;
 use arrow2::datatypes::{DataType, Schema};
 use arrow2::io::{ipc, parquet};
@@ -74,14 +75,36 @@ impl Column {
     pub fn inner_mut<T: Any + 'static>(&mut self) -> &mut T {
         self.array.as_mut_any().downcast_mut::<T>().unwrap()
     }
+    pub fn inner<T: Any + 'static>(&self) -> &T {
+        self.array.as_any().downcast_ref::<T>().unwrap()
+    }
     pub fn push<V, T: array::TryPush<V> + Any + 'static>(&mut self, value: V) -> Result<()> {
         self.inner_mut::<T>().try_push(value)?;
         Ok(())
     }
+    pub fn into_pyobjects(self, py: Python) -> Vec<PyObject> {
+        match self.dtype {
+            DataType::Boolean => self
+                .inner::<BooleanArray>()
+                .iter()
+                .map(|v| v.to_object(py))
+                .collect(),
+            DataType::Binary => self
+                .inner::<BinaryArray<i32>>()
+                .iter()
+                .map(|v| v.to_object(py))
+                .collect(),
+            _ => unimplemented!(
+                "Dtype: {:?} not implemented for conversion to numpy",
+                &self.dtype
+            ),
+        }
+    }
 }
 
 fn column_into_numpy_array(py: Python, col: Column) -> &np::PyArray1<PyObject> {
-    np::PyArray::from_iter(py, vec![0, 1, 2].iter().map(|v| v.to_object(py)))
+    unimplemented!()
+    //np::PyArray::from_iter(py, iter)
 }
 
 fn write_table_to_parquet(table: Table, path: &str) -> Result<()> {
