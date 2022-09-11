@@ -42,6 +42,7 @@ fn to_py_err(err: impl ToString) -> PyErr {
     PyErr::new::<FlacoException, _>(err.to_string())
 }
 
+/// Read SQL to a file; Parquet or Feather/IPC format.
 // TODO: Stream data into a file in chunks during query reading
 #[pyfunction]
 pub fn read_sql_to_file(uri: &str, stmt: &str, path: &str, format: FileFormat) -> PyResult<()> {
@@ -54,11 +55,13 @@ pub fn read_sql_to_file(uri: &str, stmt: &str, path: &str, format: FileFormat) -
     Ok(())
 }
 
+/// Read SQL to a dict of numpy arrays, where keys are column names.
+/// NOTE: This is not very efficient currently, likely should not use it.
 #[pyfunction]
-pub fn read_sql_to_numpy<'a, 'py>(
+pub fn read_sql_to_numpy<'py>(
     py: Python<'py>,
-    uri: &'a str,
-    stmt: &'a str,
+    uri: &str,
+    stmt: &str,
 ) -> PyResult<BTreeMap<String, PyObject>> {
     let mut client = postgres::Client::connect(uri, postgres::NoTls).map_err(to_py_err)?;
     let table = postgresql::read_sql(&mut client, stmt).map_err(to_py_err)?;
