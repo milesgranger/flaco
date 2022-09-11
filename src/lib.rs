@@ -96,40 +96,20 @@ impl Column {
         self.inner_mut::<T>().try_push(value)?;
         Ok(())
     }
-    fn has_nulls(&self) -> bool {
-        self.array
-            .validity()
-            .map(|v| v.unset_bits() > 0)
-            .unwrap_or_else(|| false)
-    }
     pub fn into_pyarray(mut self, py: Python) -> PyObject {
         macro_rules! to_pyarray {
             ($mut_arr:ty, $arr:ty) => {{
-                if self.has_nulls() {
-                    self.inner_mut::<$mut_arr>()
-                        .as_arc()
-                        .as_ref()
-                        .as_any()
-                        .downcast_ref::<$arr>()
-                        .unwrap()
-                        .iter()
-                        .map(|v| v.to_object(py))
-                        .collect::<Vec<_>>()
-                        .into_pyarray(py)
-                        .to_object(py)
-                } else {
-                    self.inner_mut::<$mut_arr>()
-                        .as_arc()
-                        .as_ref()
-                        .as_any()
-                        .downcast_ref::<$arr>()
-                        .unwrap()
-                        .iter()
-                        .map(|v| v.unwrap().to_object(py))
-                        .collect::<Vec<_>>()
-                        .into_pyarray(py)
-                        .to_object(py)
-                }
+                self.inner_mut::<$mut_arr>()
+                    .as_arc()
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<$arr>()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.to_object(py))
+                    .collect::<Vec<_>>()
+                    .into_pyarray(py)
+                    .to_object(py)
             }};
         }
         match self.dtype {
