@@ -1,6 +1,7 @@
 use arrow2::array::{
-    Array, BinaryArray, MutableBinaryArray, MutableBooleanArray, MutableFixedSizeBinaryArray,
-    MutablePrimitiveArray, MutableUtf8Array, Utf8Array,
+    Array, BinaryArray, BooleanArray, FixedSizeBinaryArray, MutableBinaryArray,
+    MutableBooleanArray, MutableFixedSizeBinaryArray, MutablePrimitiveArray, MutableUtf8Array,
+    PrimitiveArray, Utf8Array,
 };
 use arrow2::chunk::Chunk;
 use arrow2::datatypes::{DataType, Schema};
@@ -10,6 +11,7 @@ use numpy::IntoPyArray;
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
+use pyo3::types::PyBytes;
 use pyo3::wrap_pyfunction;
 use std::any::Any;
 use std::collections::BTreeMap;
@@ -95,7 +97,7 @@ impl Column {
         self.inner_mut::<T>().try_push(value)?;
         Ok(())
     }
-    fn contains_nulls(&self) -> bool {
+    fn has_nulls(&self) -> bool {
         self.array
             .validity()
             .map(|v| v.unset_bits() > 0)
@@ -105,102 +107,53 @@ impl Column {
         [DataType::Float16, DataType::Float32, DataType::Float64].contains(&self.dtype)
     }
     pub fn into_pyarray(mut self, py: Python) -> PyObject {
-        match self.dtype {
-            DataType::Boolean => self
-                .inner::<MutableBooleanArray>()
-                .iter()
-                .map(|v| v.to_object(py))
-                .collect::<Vec<_>>()
-                .into_pyarray(py)
-                .to_object(py),
-            DataType::Binary => self
-                .inner_mut::<MutableBinaryArray<i32>>()
-                .as_arc()
-                .as_ref()
-                .as_any()
-                .downcast_ref::<BinaryArray<i32>>()
-                .unwrap()
-                .iter()
-                .map(|v| v.to_object(py))
-                .collect::<Vec<PyObject>>()
-                .into_pyarray(py)
-                .to_object(py),
+        macro_rules! to_pyarray {
+            ($mut_arr:ty, $arr:ty) => {{
+                //let is_float = self.is_float();
+                let has_nulls = self.has_nulls();
 
-            DataType::Utf8 => self
-                .inner_mut::<MutableUtf8Array<i32>>()
-                .as_arc()
-                .as_ref()
-                .as_any()
-                .downcast_ref::<Utf8Array<i32>>()
-                .unwrap()
-                .iter()
-                .map(|v| v.to_object(py))
-                .collect::<Vec<PyObject>>()
-                .into_pyarray(py)
-                .to_object(py),
-            DataType::Int8 => self
-                .inner::<MutablePrimitiveArray<i8>>()
-                .iter()
-                .map(|v| v.to_object(py))
-                .collect::<Vec<PyObject>>()
-                .into_pyarray(py)
-                .to_object(py),
-            DataType::Int16 => self
-                .inner::<MutablePrimitiveArray<i16>>()
-                .iter()
-                .map(|v| v.to_object(py))
-                .collect::<Vec<PyObject>>()
-                .into_pyarray(py)
-                .to_object(py),
-            DataType::Int32 => self
-                .inner::<MutablePrimitiveArray<i32>>()
-                .iter()
-                .map(|v| v.to_object(py))
-                .collect::<Vec<PyObject>>()
-                .into_pyarray(py)
-                .to_object(py),
-            DataType::UInt32 => self
-                .inner::<MutablePrimitiveArray<u32>>()
-                .iter()
-                .map(|v| v.to_object(py))
-                .collect::<Vec<PyObject>>()
-                .into_pyarray(py)
-                .to_object(py),
-            DataType::Int64 => self
-                .inner::<MutablePrimitiveArray<i64>>()
-                .iter()
-                .map(|v| v.to_object(py))
-                .collect::<Vec<PyObject>>()
-                .into_pyarray(py)
-                .to_object(py),
-            DataType::UInt64 => self
-                .inner::<MutablePrimitiveArray<u64>>()
-                .iter()
-                .map(|v| v.to_object(py))
-                .collect::<Vec<PyObject>>()
-                .into_pyarray(py)
-                .to_object(py),
-            DataType::Float32 => self
-                .inner::<MutablePrimitiveArray<f32>>()
-                .iter()
-                .map(|v| v.to_object(py))
-                .collect::<Vec<PyObject>>()
-                .into_pyarray(py)
-                .to_object(py),
-            DataType::Float64 => self
-                .inner::<MutablePrimitiveArray<f64>>()
-                .iter()
-                .map(|v| v.to_object(py))
-                .collect::<Vec<PyObject>>()
-                .into_pyarray(py)
-                .to_object(py),
-            DataType::FixedSizeBinary(_) => self
-                .inner::<MutableFixedSizeBinaryArray>()
-                .iter()
-                .map(|v| v.to_object(py))
-                .collect::<Vec<PyObject>>()
-                .into_pyarray(py)
-                .to_object(py),
+                if has_nulls {
+                    self.inner_mut::<$mut_arr>()
+                        .as_arc()
+                        .as_ref()
+                        .as_any()
+                        .downcast_ref::<$arr>()
+                        .unwrap()
+                        .iter()
+                        .map(|v| v.to_object(py))
+                        .collect::<Vec<_>>()
+                        .into_pyarray(py)
+                        .to_object(py)
+                } else {
+                    self.inner_mut::<$mut_arr>()
+                        .as_arc()
+                        .as_ref()
+                        .as_any()
+                        .downcast_ref::<$arr>()
+                        .unwrap()
+                        .iter()
+                        .map(|v| v.unwrap().to_object(py))
+                        .collect::<Vec<_>>()
+                        .into_pyarray(py)
+                        .to_object(py)
+                }
+            }};
+        }
+        match self.dtype {
+            DataType::Boolean => to_pyarray!(MutableBooleanArray, BooleanArray),
+            DataType::Binary => to_pyarray!(MutableBinaryArray<i32>, BinaryArray<i32>),
+            DataType::Utf8 => to_pyarray!(MutableUtf8Array<i32>, Utf8Array<i32>),
+            DataType::Int8 => to_pyarray!(MutablePrimitiveArray<i8>, PrimitiveArray<i8>),
+            DataType::Int16 => to_pyarray!(MutablePrimitiveArray<i16>, PrimitiveArray<i16>),
+            DataType::Int32 => to_pyarray!(MutablePrimitiveArray<i32>, PrimitiveArray<i32>),
+            DataType::UInt32 => to_pyarray!(MutablePrimitiveArray<u32>, PrimitiveArray<u32>),
+            DataType::Int64 => to_pyarray!(MutablePrimitiveArray<i64>, PrimitiveArray<i64>),
+            DataType::UInt64 => to_pyarray!(MutablePrimitiveArray<u64>, PrimitiveArray<u64>),
+            DataType::Float32 => to_pyarray!(MutablePrimitiveArray<f32>, PrimitiveArray<f32>),
+            DataType::Float64 => to_pyarray!(MutablePrimitiveArray<f64>, PrimitiveArray<f64>),
+            DataType::FixedSizeBinary(_) => {
+                to_pyarray!(MutableFixedSizeBinaryArray, FixedSizeBinaryArray)
+            }
             _ => unimplemented!(
                 "Dtype: {:?} not implemented for conversion to numpy",
                 &self.dtype
