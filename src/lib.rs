@@ -1,7 +1,13 @@
+use arrow2::array::{
+    BinaryArray, BooleanArray, FixedSizeBinaryArray, MutableBinaryArray, MutableBooleanArray,
+    MutableFixedSizeBinaryArray, MutablePrimitiveArray, MutableUtf8Array, PrimitiveArray,
+    Utf8Array,
+};
 use arrow2::chunk::Chunk;
 use arrow2::datatypes::{DataType, Schema};
 use arrow2::io::{ipc, parquet};
 use arrow2::{array, array::MutableArray};
+use numpy::IntoPyArray;
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
@@ -18,6 +24,7 @@ create_exception!(flaco, FlacoException, PyException);
 fn flaco(py: Python, m: &PyModule) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(read_sql_to_file, m)?)?;
+    m.add_function(wrap_pyfunction!(read_sql_to_numpy, m)?)?;
     m.add_class::<FileFormat>()?;
     m.add("FlacoException", py.get_type::<FlacoException>())?;
     Ok(())
@@ -35,6 +42,7 @@ fn to_py_err(err: impl ToString) -> PyErr {
     PyErr::new::<FlacoException, _>(err.to_string())
 }
 
+/// Read SQL to a file; Parquet or Feather/IPC format.
 // TODO: Stream data into a file in chunks during query reading
 #[pyfunction]
 pub fn read_sql_to_file(uri: &str, stmt: &str, path: &str, format: FileFormat) -> PyResult<()> {
@@ -45,6 +53,23 @@ pub fn read_sql_to_file(uri: &str, stmt: &str, path: &str, format: FileFormat) -
         FileFormat::Parquet => write_table_to_parquet(table, path).map_err(to_py_err)?,
     }
     Ok(())
+}
+
+/// Read SQL to a dict of numpy arrays, where keys are column names.
+/// NOTE: This is not very efficient currently, likely should not use it.
+#[pyfunction]
+pub fn read_sql_to_numpy<'py>(
+    py: Python<'py>,
+    uri: &str,
+    stmt: &str,
+) -> PyResult<BTreeMap<String, PyObject>> {
+    let mut client = postgres::Client::connect(uri, postgres::NoTls).map_err(to_py_err)?;
+    let table = postgresql::read_sql(&mut client, stmt).map_err(to_py_err)?;
+    let mut result = BTreeMap::new();
+    for (name, column) in table {
+        result.insert(name, column.into_pyarray(py));
+    }
+    Ok(result)
 }
 
 pub type Table = BTreeMap<String, Column>;
@@ -67,9 +92,49 @@ impl Column {
     pub fn inner_mut<T: Any + 'static>(&mut self) -> &mut T {
         self.array.as_mut_any().downcast_mut::<T>().unwrap()
     }
+    pub fn inner<T: Any + 'static>(&self) -> &T {
+        self.array.as_any().downcast_ref::<T>().unwrap()
+    }
     pub fn push<V, T: array::TryPush<V> + Any + 'static>(&mut self, value: V) -> Result<()> {
         self.inner_mut::<T>().try_push(value)?;
         Ok(())
+    }
+    pub fn into_pyarray(mut self, py: Python) -> PyObject {
+        macro_rules! to_pyarray {
+            ($mut_arr:ty, $arr:ty) => {{
+                self.inner_mut::<$mut_arr>()
+                    .as_arc()
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<$arr>()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.to_object(py))
+                    .collect::<Vec<_>>()
+                    .into_pyarray(py)
+                    .to_object(py)
+            }};
+        }
+        match self.dtype {
+            DataType::Boolean => to_pyarray!(MutableBooleanArray, BooleanArray),
+            DataType::Binary => to_pyarray!(MutableBinaryArray<i32>, BinaryArray<i32>),
+            DataType::Utf8 => to_pyarray!(MutableUtf8Array<i32>, Utf8Array<i32>),
+            DataType::Int8 => to_pyarray!(MutablePrimitiveArray<i8>, PrimitiveArray<i8>),
+            DataType::Int16 => to_pyarray!(MutablePrimitiveArray<i16>, PrimitiveArray<i16>),
+            DataType::Int32 => to_pyarray!(MutablePrimitiveArray<i32>, PrimitiveArray<i32>),
+            DataType::UInt32 => to_pyarray!(MutablePrimitiveArray<u32>, PrimitiveArray<u32>),
+            DataType::Int64 => to_pyarray!(MutablePrimitiveArray<i64>, PrimitiveArray<i64>),
+            DataType::UInt64 => to_pyarray!(MutablePrimitiveArray<u64>, PrimitiveArray<u64>),
+            DataType::Float32 => to_pyarray!(MutablePrimitiveArray<f32>, PrimitiveArray<f32>),
+            DataType::Float64 => to_pyarray!(MutablePrimitiveArray<f64>, PrimitiveArray<f64>),
+            DataType::FixedSizeBinary(_) => {
+                to_pyarray!(MutableFixedSizeBinaryArray, FixedSizeBinaryArray)
+            }
+            _ => unimplemented!(
+                "Dtype: {:?} not implemented for conversion to numpy",
+                &self.dtype
+            ),
+        }
     }
 }
 
@@ -225,13 +290,17 @@ pub mod postgresql {
                     table
                         .entry(column_name)
                         .or_insert_with(|| Column::new(MutablePrimitiveArray::<f32>::new()))
-                        .push::<_, MutablePrimitiveArray<f32>>(row.get::<_, Option<f32>>(idx))?;
+                        .push::<_, MutablePrimitiveArray<f32>>(
+                            row.get::<_, Option<f32>>(idx).or_else(|| Some(f32::NAN)),
+                        )?;
                 }
                 &Type::FLOAT8 => {
                     table
                         .entry(column_name)
                         .or_insert_with(|| Column::new(MutablePrimitiveArray::<f64>::new()))
-                        .push::<_, MutablePrimitiveArray<f64>>(row.get::<_, Option<f64>>(idx))?;
+                        .push::<_, MutablePrimitiveArray<f64>>(
+                            row.get::<_, Option<f64>>(idx).or_else(|| Some(f64::NAN)),
+                        )?;
                 }
                 &Type::TIMESTAMP => {
                     table

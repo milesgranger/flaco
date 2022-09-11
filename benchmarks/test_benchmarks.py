@@ -1,7 +1,6 @@
 import pytest
 import numpy as np
 import pandas as pd
-import connectorx as cx
 import flaco
 from memory_profiler import profile
 from sqlalchemy import create_engine
@@ -119,22 +118,23 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
 def memory_profile():
     stmt = "select * from test_table"
     flaco.read_sql_to_file(DB_URI, stmt, 'result.feather', flaco.FileFormat.Feather)
-    
+    data = flaco.read_sql_to_numpy(DB_URI, stmt)
+    df = pd.DataFrame(data, copy=False).convert_dtypes()
     import duckdb
     import pyarrow as pa
     import pyarrow.parquet as pq
     import pyarrow.feather as pf
     import pyarrow.dataset as ds
-    #table = pq.read_table('result.parquet', memory_map=True).to_pandas()
     with pa.memory_map('result.feather', 'rb') as source:
         mytable = pa.ipc.open_file(source).read_all()
-        cur = duckdb.connect()
-        v = cur.execute('select count(*) from mytable').fetchall()
-        print(v)
+        table = mytable.rename_columns([f"col_{i}" for i in range(10)])
+        table_df = table.to_pandas()
+        #print(v)
         print(type(mytable), len(mytable))
+        print(type(table), len(table))
         print(pa.total_allocated_bytes() >> 20)
-    #engine = create_engine(DB_URI)
-    #_pandas_df = pd.read_sql(stmt, engine)
+    engine = create_engine(DB_URI)
+    _pandas_df = pd.read_sql(stmt, engine)
 
 
 if __name__ == "__main__":
