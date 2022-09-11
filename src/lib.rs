@@ -1,7 +1,7 @@
 use arrow2::array::{
-    Array, BinaryArray, BooleanArray, FixedSizeBinaryArray, MutableBinaryArray,
-    MutableBooleanArray, MutableFixedSizeBinaryArray, MutablePrimitiveArray, MutableUtf8Array,
-    PrimitiveArray, Utf8Array,
+    BinaryArray, BooleanArray, FixedSizeBinaryArray, MutableBinaryArray, MutableBooleanArray,
+    MutableFixedSizeBinaryArray, MutablePrimitiveArray, MutableUtf8Array, PrimitiveArray,
+    Utf8Array,
 };
 use arrow2::chunk::Chunk;
 use arrow2::datatypes::{DataType, Schema};
@@ -11,7 +11,6 @@ use numpy::IntoPyArray;
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
-use pyo3::types::PyBytes;
 use pyo3::wrap_pyfunction;
 use std::any::Any;
 use std::collections::BTreeMap;
@@ -103,16 +102,10 @@ impl Column {
             .map(|v| v.unset_bits() > 0)
             .unwrap_or_else(|| false)
     }
-    fn is_float(&self) -> bool {
-        [DataType::Float16, DataType::Float32, DataType::Float64].contains(&self.dtype)
-    }
     pub fn into_pyarray(mut self, py: Python) -> PyObject {
         macro_rules! to_pyarray {
             ($mut_arr:ty, $arr:ty) => {{
-                //let is_float = self.is_float();
-                let has_nulls = self.has_nulls();
-
-                if has_nulls {
+                if self.has_nulls() {
                     self.inner_mut::<$mut_arr>()
                         .as_arc()
                         .as_ref()
@@ -314,13 +307,17 @@ pub mod postgresql {
                     table
                         .entry(column_name)
                         .or_insert_with(|| Column::new(MutablePrimitiveArray::<f32>::new()))
-                        .push::<_, MutablePrimitiveArray<f32>>(row.get::<_, Option<f32>>(idx))?;
+                        .push::<_, MutablePrimitiveArray<f32>>(
+                            row.get::<_, Option<f32>>(idx).or_else(|| Some(f32::NAN)),
+                        )?;
                 }
                 &Type::FLOAT8 => {
                     table
                         .entry(column_name)
                         .or_insert_with(|| Column::new(MutablePrimitiveArray::<f64>::new()))
-                        .push::<_, MutablePrimitiveArray<f64>>(row.get::<_, Option<f64>>(idx))?;
+                        .push::<_, MutablePrimitiveArray<f64>>(
+                            row.get::<_, Option<f64>>(idx).or_else(|| Some(f64::NAN)),
+                        )?;
                 }
                 &Type::TIMESTAMP => {
                     table
