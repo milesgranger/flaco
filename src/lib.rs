@@ -312,12 +312,13 @@ pub mod postgresql {
                         )?;
                 }
                 &Type::TIMESTAMPTZ => {
+                    let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second] [offset_hour sign:mandatory]:[offset_minute]").unwrap();
                     table
                         .entry(column_name)
                         .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
                         .push::<_, MutableUtf8Array<i32>>(
                             row.get::<_, Option<time::OffsetDateTime>>(idx)
-                                .map(|v| v.to_string()),
+                                .map(|v| v.format(&format).unwrap()),
                         )?;
                 }
                 &Type::DATE => {

@@ -133,10 +133,11 @@ def memory_profile():
         print(type(mytable), len(mytable))
         print(type(table), len(table))
         print(pa.total_allocated_bytes() >> 20)
+    breakpoint()
     engine = create_engine(DB_URI)
     _pandas_df = pd.read_sql(stmt, engine)
 
 
 if __name__ == "__main__":
-    #_table_setup(n_rows=1_000_000, include_nulls=True)
+    _table_setup(n_rows=10_000, include_nulls=False)
     memory_profile()
