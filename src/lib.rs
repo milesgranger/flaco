@@ -24,7 +24,6 @@ create_exception!(flaco, FlacoException, PyException);
 fn flaco(py: Python, m: &PyModule) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(read_sql_to_file, m)?)?;
-    m.add_function(wrap_pyfunction!(read_sql_to_numpy, m)?)?;
     m.add_class::<FileFormat>()?;
     m.add("FlacoException", py.get_type::<FlacoException>())?;
     Ok(())
@@ -55,23 +54,6 @@ pub fn read_sql_to_file(uri: &str, stmt: &str, path: &str, format: FileFormat) -
     Ok(())
 }
 
-/// Read SQL to a dict of numpy arrays, where keys are column names.
-/// NOTE: This is not very efficient currently, likely should not use it.
-#[pyfunction]
-pub fn read_sql_to_numpy<'py>(
-    py: Python<'py>,
-    uri: &str,
-    stmt: &str,
-) -> PyResult<BTreeMap<String, PyObject>> {
-    let mut client = postgres::Client::connect(uri, postgres::NoTls).map_err(to_py_err)?;
-    let table = postgresql::read_sql(&mut client, stmt).map_err(to_py_err)?;
-    let mut result = BTreeMap::new();
-    for (name, column) in table {
-        result.insert(name, column.into_pyarray(py));
-    }
-    Ok(result)
-}
-
 pub type Table = BTreeMap<String, Column>;
 
 pub struct Column {
@@ -98,43 +80,6 @@ impl Column {
     pub fn push<V, T: array::TryPush<V> + Any + 'static>(&mut self, value: V) -> Result<()> {
         self.inner_mut::<T>().try_push(value)?;
         Ok(())
-    }
-    pub fn into_pyarray(mut self, py: Python) -> PyObject {
-        macro_rules! to_pyarray {
-            ($mut_arr:ty, $arr:ty) => {{
-                self.inner_mut::<$mut_arr>()
-                    .as_arc()
-                    .as_ref()
-                    .as_any()
-                    .downcast_ref::<$arr>()
-                    .unwrap()
-                    .iter()
-                    .map(|v| v.to_object(py))
-                    .collect::<Vec<_>>()
-                    .into_pyarray(py)
-                    .to_object(py)
-            }};
-        }
-        match self.dtype {
-            DataType::Boolean => to_pyarray!(MutableBooleanArray, BooleanArray),
-            DataType::Binary => to_pyarray!(MutableBinaryArray<i32>, BinaryArray<i32>),
-            DataType::Utf8 => to_pyarray!(MutableUtf8Array<i32>, Utf8Array<i32>),
-            DataType::Int8 => to_pyarray!(MutablePrimitiveArray<i8>, PrimitiveArray<i8>),
-            DataType::Int16 => to_pyarray!(MutablePrimitiveArray<i16>, PrimitiveArray<i16>),
-            DataType::Int32 => to_pyarray!(MutablePrimitiveArray<i32>, PrimitiveArray<i32>),
-            DataType::UInt32 => to_pyarray!(MutablePrimitiveArray<u32>, PrimitiveArray<u32>),
-            DataType::Int64 => to_pyarray!(MutablePrimitiveArray<i64>, PrimitiveArray<i64>),
-            DataType::UInt64 => to_pyarray!(MutablePrimitiveArray<u64>, PrimitiveArray<u64>),
-            DataType::Float32 => to_pyarray!(MutablePrimitiveArray<f32>, PrimitiveArray<f32>),
-            DataType::Float64 => to_pyarray!(MutablePrimitiveArray<f64>, PrimitiveArray<f64>),
-            DataType::FixedSizeBinary(_) => {
-                to_pyarray!(MutableFixedSizeBinaryArray, FixedSizeBinaryArray)
-            }
-            _ => unimplemented!(
-                "Dtype: {:?} not implemented for conversion to numpy",
-                &self.dtype
-            ),
-        }
     }
 }
 
@@ -324,9 +269,25 @@ pub mod postgresql {
                 &Type::DATE => {
                     table
                         .entry(column_name)
-                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
-                        .push::<_, MutableUtf8Array<i32>>(
-                            row.get::<_, Option<time::Date>>(idx).map(|v| v.to_string()),
+                        .or_insert_with(|| {
+                            Column::new(
+                                MutablePrimitiveArray::<i32>::new()
+                                    .to(arrow2::datatypes::DataType::Date32),
+                            )
+                        })
+                        .push::<_, MutablePrimitiveArray<i32>>(
+                            row.get::<_, Option<time::Date>>(idx).map(|v| {
+                                let format =
+                                    time::format_description::parse("[year]-[month]-[day]")
+                                        .unwrap();
+                                let base = time::Date::parse("1970-01-01", &format).unwrap();
+                                let days = (base - v).whole_days() as i32;
+                                if v > base {
+                                    days.abs()
+                                } else {
+                                    days
+                                }
+                            }),
                         )?;
                 }
                 &Type::TIME => {
