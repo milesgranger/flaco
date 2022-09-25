@@ -277,10 +277,7 @@ pub mod postgresql {
                         })
                         .push::<_, MutablePrimitiveArray<i32>>(
                             row.get::<_, Option<time::Date>>(idx).map(|v| {
-                                let format =
-                                    time::format_description::parse("[year]-[month]-[day]")
-                                        .unwrap();
-                                let base = time::Date::parse("1970-01-01", &format).unwrap();
+                                let base = time::OffsetDateTime::UNIX_EPOCH.date();
                                 let days = (base - v).whole_days() as i32;
                                 if v > base {
                                     days.abs()
