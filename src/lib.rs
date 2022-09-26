@@ -1,13 +1,7 @@
-use arrow2::array::{
-    BinaryArray, BooleanArray, FixedSizeBinaryArray, MutableBinaryArray, MutableBooleanArray,
-    MutableFixedSizeBinaryArray, MutablePrimitiveArray, MutableUtf8Array, PrimitiveArray,
-    Utf8Array,
-};
 use arrow2::chunk::Chunk;
 use arrow2::datatypes::{DataType, Schema};
 use arrow2::io::{ipc, parquet};
 use arrow2::{array, array::MutableArray};
-use numpy::IntoPyArray;
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
@@ -317,25 +311,25 @@ pub mod postgresql {
                             }),
                         )?;
                 }
-                &Type::TIME => {
+                &Type::TIME | &Type::TIMETZ => {
                     table
                         .entry(column_name)
-                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
-                        .push::<_, MutableUtf8Array<i32>>(
-                            row.get::<_, Option<time::Time>>(idx).map(|v| v.to_string()),
-                        )?;
-                }
-                &Type::TIMETZ => {
-                    // TIMETZ is 12 bytes; Fixed size binary array then since no DataType matches
-                    table
-                        .entry(column_name)
-                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
-                        .push::<_, MutableUtf8Array<i32>>(
-                            row.get::<_, Option<time::Time>>(idx).map(|v| v.to_string()),
+                        .or_insert_with(|| {
+                            Column::new(
+                                MutablePrimitiveArray::<i64>::new()
+                                    .to(DataType::Time64(TimeUnit::Microsecond)),
+                            )
+                        })
+                        .push::<_, MutablePrimitiveArray<i64>>(
+                            row.get::<_, Option<time::Time>>(idx).map(|v| {
+                                let (h, m, s, micro) = v.as_hms_micro();
+                                let seconds = (h as i64 * 60 * 60) + (m as i64 * 60) + s as i64;
+                                micro as i64 + seconds * 1_000_000
+                            }),
                         )?;
                 }
                 &Type::INTERVAL => {
-                    // INTERVAL is 16 bytes; Fixed size binary array then sinece i128 not impl FromSql
+                    // INTERVAL is 16 bytes; Fixed size binary array then since i128 not impl FromSql
                     table
                         .entry(column_name)
                         .or_insert_with(|| Column::new(MutableFixedSizeBinaryArray::new(16)))
