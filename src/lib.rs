@@ -272,7 +272,6 @@ pub mod postgresql {
                         )?;
                 }
                 &Type::TIMESTAMPTZ => {
-                    // TODO: If first row is null, the TimeStamp will not actually have a TZ. :S
                     let value = row.get::<_, Option<time::OffsetDateTime>>(idx);
                     let format =
                         format_description::parse("[offset_hour sign:mandatory]:[offset_minute]")
@@ -280,6 +279,11 @@ pub mod postgresql {
                     table
                         .entry(column_name)
                         .or_insert_with(|| {
+                            if value.is_none() {
+                                unimplemented!(
+                                    "Handle case where first row of TZ aware timestamp is null."
+                                )
+                            }
                             Column::new(MutablePrimitiveArray::<i64>::new().to(
                                 DataType::Timestamp(
                                     TimeUnit::Microsecond,
