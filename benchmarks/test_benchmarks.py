@@ -106,7 +106,7 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
     df["col8"] = pd.to_datetime(df.col7)
     df["col9"] = pd.to_datetime(df.col7, utc=True)
     df["col10"] = df.col9.dt.time
-    df.to_sql(table, index=False, con=engine, chunksize=10_000, if_exists="append")
+    df.to_sql(table, index=False, con=engine, chunksize=50_000, if_exists="replace")
 
     if include_nulls:
         df = df[:20]
@@ -118,8 +118,6 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
 def memory_profile():
     stmt = "select * from test_table"
     flaco.read_sql_to_file(DB_URI, stmt, 'result.feather', flaco.FileFormat.Feather)
-    data = flaco.read_sql_to_numpy(DB_URI, stmt)
-    df = pd.DataFrame(data, copy=False).convert_dtypes()
     import duckdb
     import pyarrow as pa
     import pyarrow.parquet as pq
@@ -127,17 +125,13 @@ def memory_profile():
     import pyarrow.dataset as ds
     with pa.memory_map('result.feather', 'rb') as source:
         mytable = pa.ipc.open_file(source).read_all()
-        table = mytable.rename_columns([f"col_{i}" for i in range(10)])
-        table_df = table.to_pandas()
+        table_df = mytable.to_pandas()
         #print(v)
-        print(type(mytable), len(mytable))
-        print(type(table), len(table))
         print(pa.total_allocated_bytes() >> 20)
-    breakpoint()
     engine = create_engine(DB_URI)
     _pandas_df = pd.read_sql(stmt, engine)
 
 
 if __name__ == "__main__":
-    _table_setup(n_rows=10_000, include_nulls=False)
+    #_table_setup(n_rows=1_000_000, include_nulls=False)
     memory_profile()

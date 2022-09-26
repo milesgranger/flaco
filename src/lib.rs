@@ -1,13 +1,7 @@
-use arrow2::array::{
-    BinaryArray, BooleanArray, FixedSizeBinaryArray, MutableBinaryArray, MutableBooleanArray,
-    MutableFixedSizeBinaryArray, MutablePrimitiveArray, MutableUtf8Array, PrimitiveArray,
-    Utf8Array,
-};
 use arrow2::chunk::Chunk;
 use arrow2::datatypes::{DataType, Schema};
 use arrow2::io::{ipc, parquet};
 use arrow2::{array, array::MutableArray};
-use numpy::IntoPyArray;
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
@@ -24,7 +18,6 @@ create_exception!(flaco, FlacoException, PyException);
 fn flaco(py: Python, m: &PyModule) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(read_sql_to_file, m)?)?;
-    m.add_function(wrap_pyfunction!(read_sql_to_numpy, m)?)?;
     m.add_class::<FileFormat>()?;
     m.add("FlacoException", py.get_type::<FlacoException>())?;
     Ok(())
@@ -55,23 +48,6 @@ pub fn read_sql_to_file(uri: &str, stmt: &str, path: &str, format: FileFormat) -
     Ok(())
 }
 
-/// Read SQL to a dict of numpy arrays, where keys are column names.
-/// NOTE: This is not very efficient currently, likely should not use it.
-#[pyfunction]
-pub fn read_sql_to_numpy<'py>(
-    py: Python<'py>,
-    uri: &str,
-    stmt: &str,
-) -> PyResult<BTreeMap<String, PyObject>> {
-    let mut client = postgres::Client::connect(uri, postgres::NoTls).map_err(to_py_err)?;
-    let table = postgresql::read_sql(&mut client, stmt).map_err(to_py_err)?;
-    let mut result = BTreeMap::new();
-    for (name, column) in table {
-        result.insert(name, column.into_pyarray(py));
-    }
-    Ok(result)
-}
-
 pub type Table = BTreeMap<String, Column>;
 
 pub struct Column {
@@ -98,43 +74,6 @@ impl Column {
     pub fn push<V, T: array::TryPush<V> + Any + 'static>(&mut self, value: V) -> Result<()> {
         self.inner_mut::<T>().try_push(value)?;
         Ok(())
-    }
-    pub fn into_pyarray(mut self, py: Python) -> PyObject {
-        macro_rules! to_pyarray {
-            ($mut_arr:ty, $arr:ty) => {{
-                self.inner_mut::<$mut_arr>()
-                    .as_arc()
-                    .as_ref()
-                    .as_any()
-                    .downcast_ref::<$arr>()
-                    .unwrap()
-                    .iter()
-                    .map(|v| v.to_object(py))
-                    .collect::<Vec<_>>()
-                    .into_pyarray(py)
-                    .to_object(py)
-            }};
-        }
-        match self.dtype {
-            DataType::Boolean => to_pyarray!(MutableBooleanArray, BooleanArray),
-            DataType::Binary => to_pyarray!(MutableBinaryArray<i32>, BinaryArray<i32>),
-            DataType::Utf8 => to_pyarray!(MutableUtf8Array<i32>, Utf8Array<i32>),
-            DataType::Int8 => to_pyarray!(MutablePrimitiveArray<i8>, PrimitiveArray<i8>),
-            DataType::Int16 => to_pyarray!(MutablePrimitiveArray<i16>, PrimitiveArray<i16>),
-            DataType::Int32 => to_pyarray!(MutablePrimitiveArray<i32>, PrimitiveArray<i32>),
-            DataType::UInt32 => to_pyarray!(MutablePrimitiveArray<u32>, PrimitiveArray<u32>),
-            DataType::Int64 => to_pyarray!(MutablePrimitiveArray<i64>, PrimitiveArray<i64>),
-            DataType::UInt64 => to_pyarray!(MutablePrimitiveArray<u64>, PrimitiveArray<u64>),
-            DataType::Float32 => to_pyarray!(MutablePrimitiveArray<f32>, PrimitiveArray<f32>),
-            DataType::Float64 => to_pyarray!(MutablePrimitiveArray<f64>, PrimitiveArray<f64>),
-            DataType::FixedSizeBinary(_) => {
-                to_pyarray!(MutableFixedSizeBinaryArray, FixedSizeBinaryArray)
-            }
-            _ => unimplemented!(
-                "Dtype: {:?} not implemented for conversion to numpy",
-                &self.dtype
-            ),
-        }
     }
 }
 
@@ -198,6 +137,7 @@ pub mod postgresql {
         MutableBinaryArray, MutableBooleanArray, MutableFixedSizeBinaryArray,
         MutablePrimitiveArray, MutableUtf8Array,
     };
+    use arrow2::datatypes::{DataType, TimeUnit};
 
     use postgres as pg;
     use postgres::fallible_iterator::FallibleIterator;
@@ -205,7 +145,9 @@ pub mod postgresql {
     use rust_decimal::{prelude::ToPrimitive, Decimal};
     use std::collections::BTreeMap;
     use std::{iter::Iterator, net::IpAddr};
-    use time;
+    use time::{self, format_description};
+
+    const UNIX_EPOCH: time::OffsetDateTime = time::OffsetDateTime::UNIX_EPOCH;
 
     pub fn read_sql(client: &mut pg::Client, sql: &str) -> Result<Table> {
         let mut row_iter = client.query_raw::<_, &i32, _>(sql, &[])?;
@@ -305,49 +247,89 @@ pub mod postgresql {
                 &Type::TIMESTAMP => {
                     table
                         .entry(column_name)
-                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
-                        .push::<_, MutableUtf8Array<i32>>(
-                            row.get::<_, Option<time::PrimitiveDateTime>>(idx)
-                                .map(|v| v.to_string()),
+                        .or_insert_with(|| {
+                            Column::new(
+                                MutablePrimitiveArray::<i64>::new()
+                                    .to(DataType::Timestamp(TimeUnit::Microsecond, None)),
+                            )
+                        })
+                        .push::<_, MutablePrimitiveArray<i64>>(
+                            row.get::<_, Option<time::PrimitiveDateTime>>(idx).map(|v| {
+                                let diff =
+                                    (UNIX_EPOCH - v.assume_utc()).whole_microseconds() as i64;
+                                if v.assume_utc() > UNIX_EPOCH {
+                                    diff.abs()
+                                } else {
+                                    diff
+                                }
+                            }),
                         )?;
                 }
                 &Type::TIMESTAMPTZ => {
-                    let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second] [offset_hour sign:mandatory]:[offset_minute]").unwrap();
+                    let value = row.get::<_, Option<time::OffsetDateTime>>(idx);
+                    let format =
+                        format_description::parse("[offset_hour sign:mandatory]:[offset_minute]")
+                            .unwrap();
                     table
                         .entry(column_name)
-                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
-                        .push::<_, MutableUtf8Array<i32>>(
-                            row.get::<_, Option<time::OffsetDateTime>>(idx)
-                                .map(|v| v.format(&format).unwrap()),
-                        )?;
+                        .or_insert_with(|| {
+                            if value.is_none() {
+                                unimplemented!(
+                                    "Handle case where first row of TZ aware timestamp is null."
+                                )
+                            }
+                            Column::new(MutablePrimitiveArray::<i64>::new().to(
+                                DataType::Timestamp(
+                                    TimeUnit::Microsecond,
+                                    value.map(|v| v.offset().format(&format).unwrap()),
+                                ),
+                            ))
+                        })
+                        .push::<_, MutablePrimitiveArray<i64>>(value.map(|v| {
+                            let diff = (UNIX_EPOCH - v).whole_microseconds() as i64;
+                            if v > UNIX_EPOCH {
+                                diff.abs()
+                            } else {
+                                diff
+                            }
+                        }))?;
                 }
                 &Type::DATE => {
                     table
                         .entry(column_name)
-                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
-                        .push::<_, MutableUtf8Array<i32>>(
-                            row.get::<_, Option<time::Date>>(idx).map(|v| v.to_string()),
+                        .or_insert_with(|| {
+                            Column::new(MutablePrimitiveArray::<i32>::new().to(DataType::Date32))
+                        })
+                        .push::<_, MutablePrimitiveArray<i32>>(
+                            row.get::<_, Option<time::Date>>(idx).map(|v| {
+                                let days = (UNIX_EPOCH.date() - v).whole_days() as i32;
+                                if v > UNIX_EPOCH.date() {
+                                    days.abs()
+                                } else {
+                                    days
+                                }
+                            }),
                         )?;
                 }
-                &Type::TIME => {
+                &Type::TIME | &Type::TIMETZ => {
                     table
                         .entry(column_name)
-                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
-                        .push::<_, MutableUtf8Array<i32>>(
-                            row.get::<_, Option<time::Time>>(idx).map(|v| v.to_string()),
-                        )?;
-                }
-                &Type::TIMETZ => {
-                    // TIMETZ is 12 bytes; Fixed size binary array then since no DataType matches
-                    table
-                        .entry(column_name)
-                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
-                        .push::<_, MutableUtf8Array<i32>>(
-                            row.get::<_, Option<time::Time>>(idx).map(|v| v.to_string()),
+                        .or_insert_with(|| {
+                            Column::new(
+                                MutablePrimitiveArray::<i64>::new()
+                                    .to(DataType::Time64(TimeUnit::Microsecond)),
+                            )
+                        })
+                        .push::<_, MutablePrimitiveArray<i64>>(
+                            row.get::<_, Option<time::Time>>(idx).map(|v| {
+                                let (h, m, s, micro) = v.as_hms_micro();
+                                let seconds = (h as i64 * 60 * 60) + (m as i64 * 60) + s as i64;
+                                micro as i64 + seconds * 1_000_000
+                            }),
                         )?;
                 }
                 &Type::INTERVAL => {
-                    // INTERVAL is 16 bytes; Fixed size binary array then sinece i128 not impl FromSql
+                    // INTERVAL is 16 bytes; Fixed size binary array then since i128 not impl FromSql
                     table
                         .entry(column_name)
                         .or_insert_with(|| Column::new(MutableFixedSizeBinaryArray::new(16)))
