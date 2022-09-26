@@ -143,6 +143,7 @@ pub mod postgresql {
         MutableBinaryArray, MutableBooleanArray, MutableFixedSizeBinaryArray,
         MutablePrimitiveArray, MutableUtf8Array,
     };
+    use arrow2::datatypes::{DataType, TimeUnit};
 
     use postgres as pg;
     use postgres::fallible_iterator::FallibleIterator;
@@ -150,7 +151,9 @@ pub mod postgresql {
     use rust_decimal::{prelude::ToPrimitive, Decimal};
     use std::collections::BTreeMap;
     use std::{iter::Iterator, net::IpAddr};
-    use time;
+    use time::{self, format_description};
+
+    const UNIX_EPOCH: time::OffsetDateTime = time::OffsetDateTime::UNIX_EPOCH;
 
     pub fn read_sql(client: &mut pg::Client, sql: &str) -> Result<Table> {
         let mut row_iter = client.query_raw::<_, &i32, _>(sql, &[])?;
@@ -250,36 +253,59 @@ pub mod postgresql {
                 &Type::TIMESTAMP => {
                     table
                         .entry(column_name)
-                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
-                        .push::<_, MutableUtf8Array<i32>>(
-                            row.get::<_, Option<time::PrimitiveDateTime>>(idx)
-                                .map(|v| v.to_string()),
+                        .or_insert_with(|| {
+                            Column::new(
+                                MutablePrimitiveArray::<i64>::new()
+                                    .to(DataType::Timestamp(TimeUnit::Microsecond, None)),
+                            )
+                        })
+                        .push::<_, MutablePrimitiveArray<i64>>(
+                            row.get::<_, Option<time::PrimitiveDateTime>>(idx).map(|v| {
+                                let diff =
+                                    (UNIX_EPOCH - v.assume_utc()).whole_microseconds() as i64;
+                                if v.assume_utc() > UNIX_EPOCH {
+                                    diff.abs()
+                                } else {
+                                    diff
+                                }
+                            }),
                         )?;
                 }
                 &Type::TIMESTAMPTZ => {
-                    let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second] [offset_hour sign:mandatory]:[offset_minute]").unwrap();
+                    // TODO: If first row is null, the TimeStamp will not actually have a TZ. :S
+                    let value = row.get::<_, Option<time::OffsetDateTime>>(idx);
+                    let format =
+                        format_description::parse("[offset_hour sign:mandatory]:[offset_minute]")
+                            .unwrap();
                     table
                         .entry(column_name)
-                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
-                        .push::<_, MutableUtf8Array<i32>>(
-                            row.get::<_, Option<time::OffsetDateTime>>(idx)
-                                .map(|v| v.format(&format).unwrap()),
-                        )?;
+                        .or_insert_with(|| {
+                            Column::new(MutablePrimitiveArray::<i64>::new().to(
+                                DataType::Timestamp(
+                                    TimeUnit::Microsecond,
+                                    value.map(|v| v.offset().format(&format).unwrap()),
+                                ),
+                            ))
+                        })
+                        .push::<_, MutablePrimitiveArray<i64>>(value.map(|v| {
+                            let diff = (UNIX_EPOCH - v).whole_microseconds() as i64;
+                            if v > UNIX_EPOCH {
+                                diff.abs()
+                            } else {
+                                diff
+                            }
+                        }))?;
                 }
                 &Type::DATE => {
                     table
                         .entry(column_name)
                         .or_insert_with(|| {
-                            Column::new(
-                                MutablePrimitiveArray::<i32>::new()
-                                    .to(arrow2::datatypes::DataType::Date32),
-                            )
+                            Column::new(MutablePrimitiveArray::<i32>::new().to(DataType::Date32))
                         })
                         .push::<_, MutablePrimitiveArray<i32>>(
                             row.get::<_, Option<time::Date>>(idx).map(|v| {
-                                let base = time::OffsetDateTime::UNIX_EPOCH.date();
-                                let days = (base - v).whole_days() as i32;
-                                if v > base {
+                                let days = (UNIX_EPOCH.date() - v).whole_days() as i32;
+                                if v > UNIX_EPOCH.date() {
                                     days.abs()
                                 } else {
                                     days
