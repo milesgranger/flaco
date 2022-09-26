@@ -106,7 +106,7 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
     df["col8"] = pd.to_datetime(df.col7)
     df["col9"] = pd.to_datetime(df.col7, utc=True)
     df["col10"] = df.col9.dt.time
-    df.to_sql(table, index=False, con=engine, chunksize=10_000, if_exists="append")
+    df.to_sql(table, index=False, con=engine, chunksize=50_000, if_exists="replace")
 
     if include_nulls:
         df = df[:20]
@@ -130,9 +130,8 @@ def memory_profile():
         print(pa.total_allocated_bytes() >> 20)
     engine = create_engine(DB_URI)
     _pandas_df = pd.read_sql(stmt, engine)
-    breakpoint()
 
 
 if __name__ == "__main__":
-    _table_setup(n_rows=10_000, include_nulls=False)
+    #_table_setup(n_rows=1_000_000, include_nulls=False)
     memory_profile()
