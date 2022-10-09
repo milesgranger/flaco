@@ -8,47 +8,44 @@
 
 
 The easiest and perhaps most memory efficient way to get PostgreSQL data (more flavors to come?)
-into Arrow (IPC/Feather) or Parquet files. 
-
-If you're trying to load data directly into Pandas then you may find that evan a 'real' 100MB can cause
-bloat upwards of 1GB. Expanding this can cause significant bottle necks in processing data efficiently.
+into `pyarrow.Table`, `pandas.DataFrame` or Arrow (IPC/Feather) and Parquet files. 
 
 Since [Arrow](https://github.com/apache/arrow) supports efficient and even larger-than-memory processing,
 as with [dask](https://github.com/dask/dask), [duckdb](https://duckdb.org/), or others.
-Just getting data onto disk is sometimes the hardest part; this aims to make that easier.
+Just getting data onto disk is sometimes the hardest part; this aims to make that easier. 
+
+API:
+`flaco.read_sql_to_file`: Read SQL query into Feather or Parquet file.
+`flaco.read_sql_to_pyarrow`: Read SQL query into a pyarrow table.
 
 NOTE:
-This is still a WIP, and is purpose built for my needs. I intend to generalize it more to be
+This is still a WIP. I intend to generalize it more to be
 useful towards a wider audience. Issues and pull requests welcome!
 
 ---
 
 ### Example
 
-```python
-from flaco import read_sql_to_file, FileFormat
-
-
-uri = "postgresql://postgres:postgres@localhost:5432/postgres"
-stmt = "select * from my_big_table"
-
-read_sql_to_file(uri, stmt, 'output.data', FileFormat.Parquet)
-
-# Then with pandas...
-import pandas as pd
-df = pd.read_parquet('output.data')
-
-# pyarrow... (memory mapped file, where potentially larger than memory)
-import pyarrow as pa
-with pa.memory_map('output.data', 'rb') as source:
-  table = pa.ipc.open_file(source).read_all()  # mmap pyarrow.Table
-
-# DuckDB...
-import duckdb
-cur = duckdb.connect()
-cur.execute("select * from read_parquet('output.data')")
-
-# Or anything else which works with Arrow and/or Parquet files
+```bash
+Line #    Mem usage    Increment  Occurrences   Line Contents
+=============================================================
+   122    147.9 MiB    147.9 MiB           1   @profile
+   123                                         def memory_profile():
+   124    147.9 MiB      0.0 MiB           1       stmt = "select * from test_table"
+   125
+   126                                             # Read SQL to file
+   127    150.3 MiB      2.4 MiB           1       flaco.read_sql_to_file(DB_URI, stmt, 'result.feather', flaco.FileFormat.Feather)
+   128    150.3 MiB      0.0 MiB           1       with pa.memory_map('result.feather', 'rb') as source:
+   129    150.3 MiB      0.0 MiB           1           table1 = pa.ipc.open_file(source).read_all()
+   130    408.1 MiB    257.8 MiB           1           table1_df1 = table1.to_pandas()
+   131
+   132                                             # Read SQL to pyarrow.Table
+   133    504.3 MiB     96.2 MiB           1       table2 = flaco.read_sql_to_pyarrow(DB_URI, stmt)
+   134    644.1 MiB    139.8 MiB           1       table2_df = table2.to_pandas()
+   135
+   136                                             # Pandas
+   137    648.8 MiB      4.7 MiB           1       engine = create_engine(DB_URI)
+   138   1335.4 MiB    686.6 MiB           1       _pandas_df = pd.read_sql(stmt, engine)
 ```
 
 ---

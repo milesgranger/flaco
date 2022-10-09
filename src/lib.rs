@@ -1,5 +1,6 @@
 use arrow2::chunk::Chunk;
-use arrow2::datatypes::{DataType, Schema};
+use arrow2::datatypes::{DataType, Field, Schema};
+use arrow2::ffi::{export_array_to_c, export_field_to_c};
 use arrow2::io::{ipc, parquet};
 use arrow2::{array, array::MutableArray};
 use pyo3::create_exception;
@@ -18,6 +19,7 @@ create_exception!(flaco, FlacoException, PyException);
 fn flaco(py: Python, m: &PyModule) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(read_sql_to_file, m)?)?;
+    m.add_function(wrap_pyfunction!(read_sql_to_pyarrow, m)?)?;
     m.add_class::<FileFormat>()?;
     m.add("FlacoException", py.get_type::<FlacoException>())?;
     Ok(())
@@ -33,6 +35,40 @@ pub enum FileFormat {
 #[inline(always)]
 fn to_py_err(err: impl ToString) -> PyErr {
     PyErr::new::<FlacoException, _>(err.to_string())
+}
+
+/// Read SQL into a pyarrow.Table object. This assumes pyarrow is installed.
+#[pyfunction]
+pub fn read_sql_to_pyarrow<'py>(py: Python<'py>, uri: &str, stmt: &str) -> PyResult<PyObject> {
+    let pyarrow = PyModule::import(py, "pyarrow")?;
+    let pyarrow_array = pyarrow.getattr("Array")?;
+
+    let mut client = postgres::Client::connect(uri, postgres::NoTls).map_err(to_py_err)?;
+    let table = postgresql::read_sql(&mut client, stmt).map_err(to_py_err)?;
+
+    let mut pyarrow_array_mapping: BTreeMap<String, PyObject> = BTreeMap::new();
+    for (key, ref mut value) in table.into_iter() {
+        let field = Field::new(
+            &key,
+            value.dtype().clone(),
+            value.array.validity().is_some(),
+        );
+        let field_box = Box::new(export_field_to_c(&field));
+        let array_box = Box::new(export_array_to_c(value.array.as_box()));
+        let result = pyarrow_array
+            .call_method1(
+                "_import_from_c",
+                (
+                    array_box.as_ref() as *const _ as *const i64 as i64,
+                    field_box.as_ref() as *const _ as *const i64 as i64,
+                ),
+            )?
+            .to_object(py);
+        pyarrow_array_mapping.insert(key, result);
+    }
+    pyarrow
+        .call_method1("table", (pyarrow_array_mapping.to_object(py),))
+        .map(|v| v.to_object(py))
 }
 
 /// Read SQL to a file; Parquet or Feather/IPC format.
