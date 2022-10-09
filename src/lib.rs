@@ -184,14 +184,14 @@ pub mod postgresql {
                 &Type::TEXT | &Type::VARCHAR | &Type::UNKNOWN | &Type::NAME | &Type::BPCHAR => {
                     table
                         .entry(column_name)
-                        .or_insert_with(|| Column::new(MutableUtf8Array::<i64>::new()))
-                        .push::<_, MutableUtf8Array<i64>>(row.get::<_, Option<String>>(idx))?;
+                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
+                        .push::<_, MutableUtf8Array<i32>>(row.get::<_, Option<String>>(idx))?;
                 }
                 &Type::JSON | &Type::JSONB => {
                     table
                         .entry(column_name)
-                        .or_insert_with(|| Column::new(MutableUtf8Array::<i64>::new()))
-                        .push::<_, MutableUtf8Array<i64>>(
+                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
+                        .push::<_, MutableUtf8Array<i32>>(
                             row.get::<_, Option<serde_json::Value>>(idx)
                                 .map(|v| v.to_string()),
                         )?;
@@ -205,8 +205,8 @@ pub mod postgresql {
                 &Type::UUID => {
                     table
                         .entry(column_name)
-                        .or_insert_with(|| Column::new(MutableUtf8Array::<i64>::new()))
-                        .push::<_, MutableUtf8Array<i64>>(
+                        .or_insert_with(|| Column::new(MutableUtf8Array::<i32>::new()))
+                        .push::<_, MutableUtf8Array<i32>>(
                             row.get::<_, Option<IpAddr>>(idx).map(|v| v.to_string()),
                         )?;
                 }
