@@ -2,6 +2,11 @@ import pytest
 import numpy as np
 import pandas as pd
 import flaco
+import duckdb
+import pyarrow as pa
+import pyarrow.parquet as pq
+import pyarrow.feather as pf
+import pyarrow.dataset as ds
 from memory_profiler import profile
 from sqlalchemy import create_engine
 
@@ -117,21 +122,22 @@ def _table_setup(n_rows: int = 1_000_000, include_nulls: bool = False):
 @profile
 def memory_profile():
     stmt = "select * from test_table"
+
+    # Read SQL to file
     flaco.read_sql_to_file(DB_URI, stmt, 'result.feather', flaco.FileFormat.Feather)
-    import duckdb
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-    import pyarrow.feather as pf
-    import pyarrow.dataset as ds
     with pa.memory_map('result.feather', 'rb') as source:
-        mytable = pa.ipc.open_file(source).read_all()
-        table_df = mytable.to_pandas()
-        #print(v)
-        print(pa.total_allocated_bytes() >> 20)
+        table1 = pa.ipc.open_file(source).read_all()
+        table1_df1 = table1.to_pandas()
+
+    # Read SQL to pyarrow.Table
+    table2 = flaco.read_sql_to_pyarrow(DB_URI, stmt)
+    table2_df = table2.to_pandas()
+    
+    # Pandas
     engine = create_engine(DB_URI)
     _pandas_df = pd.read_sql(stmt, engine)
 
 
 if __name__ == "__main__":
-    #_table_setup(n_rows=1_000_000, include_nulls=False)
+    #_table_setup(n_rows=1_000_000, include_nulls=True)
     memory_profile()
