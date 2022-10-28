@@ -6,6 +6,13 @@
 ![PyPI - Wheel](https://img.shields.io/pypi/wheel/flaco)
 [![Downloads](https://pepy.tech/badge/flaco/month)](https://pepy.tech/project/flaco)
 
+---
+
+#### Install:
+
+`pip install flaco`
+
+---
 
 The easiest and perhaps most memory efficient way to get PostgreSQL data (more flavors to come?)
 into `pyarrow.Table`, `pandas.DataFrame` or Arrow (IPC/Feather) and Parquet files. 
